@@ -1,4 +1,4 @@
-import React,{Component,useEffect,useRef,useState}from"react";import{createRoot}from"react-dom/client";import{Search,Home,Users,MessageCircle,Bell,Settings,Image as ImageIcon,ThumbsUp,MessageSquare,Share2,Send,LogOut,Camera,UserPlus,UserCheck,ShieldBan,Menu,X,Check,MoreHorizontal,MoreVertical,Edit2,Trash2,Pin,Archive,Paperclip,Mic,Square,FileText,Download,Maximize2,Sun,Moon}from"lucide-react";import"./styles.css";
+import React,{Component,useEffect,useRef,useState}from"react";import{createRoot}from"react-dom/client";import{Search,Home,Users,MessageCircle,Bell,Settings,Image as ImageIcon,ThumbsUp,MessageSquare,Share2,Send,LogOut,Camera,UserPlus,UserCheck,ShieldBan,Menu,X,Check,MoreHorizontal,MoreVertical,Edit2,Trash2,Pin,Archive,Paperclip,Mic,Square,FileText,Download,Maximize2,Sun,Moon,Languages}from"lucide-react";import{LANGUAGES,setSiteLanguage}from"./i18n";import"./styles.css";
 const API=import.meta.env.VITE_API_URL||"http://localhost:8000",WS=API.replace(/^http/,"ws");const tok=()=>localStorage.getItem("socialn_token"),asset=u=>u?`${API}${u}`:null;
 const REACTIONS=[{key:"like",emoji:"👍",label:"Like"},{key:"love",emoji:"❤️",label:"Love"},{key:"haha",emoji:"😂",label:"Haha"},{key:"wow",emoji:"😮",label:"Wow"},{key:"sad",emoji:"😢",label:"Sad"},{key:"angry",emoji:"😡",label:"Angry"}];
 const reactionInfo=key=>REACTIONS.find(x=>x.key===key)||REACTIONS[0];
@@ -35,7 +35,8 @@ function ConfirmHost(){
   </div></div>
 }
 function Avatar({user,size=42,onClick}){return user?.avatar_url?<img className="avatar clickable" style={{width:size,height:size}} src={asset(user.avatar_url)} onClick={onClick}/>:<div className="avatar avatar-fallback clickable" style={{width:size,height:size}} onClick={onClick}>{(user?.name||"?")[0]}</div>}
-function Login({onLogin}){const[mode,setMode]=useState("login"),[f,setF]=useState({email:"",username:"",name:"",password:""}),[err,setErr]=useState("");async function sub(e){e.preventDefault();try{const d=await api(`/api/auth/${mode}`,{method:"POST",body:JSON.stringify(f)});localStorage.setItem("socialn_token",d.access_token);onLogin(d.user)}catch(e){setErr(e.message)}}return <div className="auth-shell"><div className="auth-card"><div className="brand big">Social<span>N</span></div><form onSubmit={sub}>{mode==="register"&&<><input placeholder="Full name" onChange={e=>setF({...f,name:e.target.value})}/><input placeholder="Username" onChange={e=>setF({...f,username:e.target.value})}/></>}<input type="email" placeholder="Email" onChange={e=>setF({...f,email:e.target.value})}/><input type="password" placeholder="Password" onChange={e=>setF({...f,password:e.target.value})}/>{err&&<div className="error">{err}</div>}<button className="primary wide">{mode==="login"?"Log in":"Register"}</button></form><button className="link-btn" onClick={()=>setMode(mode==="login"?"register":"login")}>{mode==="login"?"Create account":"Back to login"}</button></div></div>}
+function LanguagePicker({value,onChange,compact=false}){return <div className={`language-picker ${compact?"compact":""}`}><Languages size={18}/><select value={value} onChange={e=>onChange(e.target.value)} aria-label="Language">{LANGUAGES.map(language=><option key={language.code} value={language.code}>{language.label}</option>)}</select></div>}
+function Login({onLogin,language,onLanguageChange}){const[mode,setMode]=useState("login"),[f,setF]=useState({email:"",username:"",name:"",password:""}),[err,setErr]=useState("");async function sub(e){e.preventDefault();try{const d=await api(`/api/auth/${mode}`,{method:"POST",body:JSON.stringify(f)});localStorage.setItem("socialn_token",d.access_token);onLogin(d.user)}catch(e){setErr(e.message)}}return <div className="auth-shell"><div className="auth-stack"><div className="auth-card"><div className="brand big">Social<span>N</span></div><form onSubmit={sub}>{mode==="register"&&<><input placeholder="Full name" onChange={e=>setF({...f,name:e.target.value})}/><input placeholder="Username" onChange={e=>setF({...f,username:e.target.value})}/></>}<input type="email" placeholder="Email" onChange={e=>setF({...f,email:e.target.value})}/><input type="password" placeholder="Password" onChange={e=>setF({...f,password:e.target.value})}/>{err&&<div className="error">{err}</div>}<button className="primary wide">{mode==="login"?"Log in":"Register"}</button></form><button className="link-btn" onClick={()=>setMode(mode==="login"?"register":"login")}>{mode==="login"?"Create account":"Back to login"}</button></div><LanguagePicker compact value={language} onChange={onLanguageChange}/></div></div>}
 
 function PostComposer({onCreated}){
   const[content,setContent]=useState("");
@@ -759,7 +760,7 @@ function Chat({me,target,open,onChanged}){
   </div>
 }
 
-function SettingsPage({user,onUserUpdated,theme="dark",onThemeChange}){
+function SettingsPage({user,onUserUpdated,theme="dark",onThemeChange,language="en",onLanguageChange}){
   const[f,setF]=useState({current_password:"",new_password:"",confirm_password:""}),[msg,setMsg]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
   const[username,setUsername]=useState(user.username||"");
   const[usernameStatus,setUsernameStatus]=useState(null);
@@ -810,6 +811,11 @@ function SettingsPage({user,onUserUpdated,theme="dark",onThemeChange}){
         <button type="button" role="radio" aria-checked={theme==="dark"} className={`theme-option ${theme==="dark"?"selected":""}`} onClick={()=>onThemeChange?.("dark")}><Moon size={22}/><span><b>Dark</b><small>Easy on the eyes</small></span><i>{theme==="dark"?"✓":""}</i></button>
       </div>
     </div>
+    <div className="settings-section language-settings">
+      <h3>Language</h3>
+      <p className="muted small">Choose the language used across SocialN.</p>
+      <LanguagePicker value={language} onChange={onLanguageChange}/>
+    </div>
     <div className="settings-section">
       <h3>Change username</h3>
       <p className="muted small">Your profile address will become localhost:5173/{username||"username"}. You can change your username only once every 30 days.</p>
@@ -844,8 +850,10 @@ const currentPath=()=>decodeURIComponent(window.location.pathname.replace(/^\/+|
 function RoutedApp(){
   const[user,setUser]=useState(null),[view,setView]=useState("home"),[feed,setFeed]=useState([]),[profile,setProfile]=useState(null),[friends,setFriends]=useState([]),[requests,setRequests]=useState([]),[suggestions,setSuggestions]=useState([]),[target,setTarget]=useState(null),[conversations,setConversations]=useState([]),[notifs,setNotifs]=useState([]),[unread,setUnread]=useState(0),[messageUnread,setMessageUnread]=useState(0),[drop,setDrop]=useState(false),[search,setSearch]=useState(""),[results,setResults]=useState([]),[routeError,setRouteError]=useState("");
   const[theme,setTheme]=useState(()=>localStorage.getItem("socialn_theme")||"dark");
+  const[language,setLanguage]=useState(()=>localStorage.getItem("socialn_language")||"vi");
 
   useEffect(()=>{document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme;localStorage.setItem("socialn_theme",theme)},[theme]);
+  useEffect(()=>{setSiteLanguage(language)},[language]);
 
   function setRoute(path,nextView,{replace=false}={}){
     const normalized=path.startsWith("/")?path:`/${path}`;
@@ -891,7 +899,7 @@ function RoutedApp(){
   async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.type==="new_message"&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
   function logout(){localStorage.removeItem("socialn_token");window.history.replaceState({},"","/");setUser(null)}
 
-  if(!user)return <Login onLogin={u=>{setUser(u);window.history.replaceState({},"","/")}}/>;
+  if(!user)return <Login language={language} onLanguageChange={setLanguage} onLogin={u=>{setUser(u);window.history.replaceState({},"","/")}}/>;
   return <div><ConfirmHost/>
     <header className="topbar"><div className="brand" onClick={()=>go("/","home")}>Social<span>N</span></div><div className="search"><Search/><input value={search} onChange={e=>query(e.target.value)} placeholder="Search SocialN..."/>{results.length>0&&<div className="search-results">{results.map(u=><button key={u.id} onClick={()=>{openProfile(u.id);setResults([]);setSearch("")}}><Avatar user={u}/><span>{u.name}<small>@{u.username}</small></span></button>)}</div>}</div>
       <div className="top-actions"><button onClick={()=>go("/","home")}><Home/></button><button onClick={()=>go("/friends","friends")}><Users/></button><button className="message-icon-btn" onClick={()=>go("/messages","chat")}><MessageCircle/>{messageUnread>0&&<span className="badge">{messageUnread>99?"99+":messageUnread}</span>}</button><div className="notif-wrap"><button className="notification-btn" onClick={()=>setDrop(!drop)}><Bell/>{unread>0&&<span className="badge">{unread}</span>}</button>{drop&&<div className="notif-dropdown"><div className="notif-dropdown-head"><b>Notifications</b><button onClick={async()=>{await api("/api/notifications/read-all",{method:"POST"});loadN()}}>Mark all read</button></div><div className="notif-scroll">{notifs.slice(0,20).map(n=><button className={`notification-row ${n.is_read?"":"unread"}`} key={n.id} onClick={()=>read(n)}><Avatar user={n.actor}/><div className="notification-content">{n.message}<small>{new Date(n.created_at).toLocaleString()}</small></div></button>)}</div></div>}</div><button onClick={()=>go("/settings","settings")}><Settings/></button><button onClick={logout}><LogOut/></button></div>
@@ -908,7 +916,7 @@ function RoutedApp(){
           {conversations.filter(c=>Number(c.user.id)!==Number(user.id)).map(c=><ConversationRow key={c.id} conversation={c} active={Number(target?.id)===Number(c.user.id)} onOpen={()=>message(c.user)} onChanged={loadC} onDeleted={c=>{if(Number(target?.id)===Number(c.user.id)){setTarget(null);setRoute("/messages","chat")}}}/>)}
         </div><Chat me={user} target={target} open={openProfile} onChanged={()=>{loadC();loadMessageUnread()}}/></div>}
         {view==="notifications"&&<div className="card notifications-page">{notifs.map(n=><button className="notification-row" key={n.id} onClick={()=>read(n)}>{n.message}</button>)}</div>}
-        {view==="settings"&&<SettingsPage user={user} onUserUpdated={setUser} theme={theme} onThemeChange={setTheme}/>} 
+        {view==="settings"&&<SettingsPage user={user} onUserUpdated={setUser} theme={theme} onThemeChange={setTheme} language={language} onLanguageChange={setLanguage}/>} 
         {view==="not_found"&&<div className="card empty"><h2>Page not found</h2><button className="primary" onClick={()=>go("/","home")}>Go home</button></div>}
       </main>
     </div>
