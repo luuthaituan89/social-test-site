@@ -76,6 +76,7 @@ class Post(Base):
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     content: Mapped[str] = mapped_column(Text, default="")
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sticker: Mapped[str | None] = mapped_column(String(100), nullable=True)
     media_type: Mapped[str] = mapped_column(String(20), default="image")
     album_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
     privacy: Mapped[Privacy] = mapped_column(Enum(Privacy), default=Privacy.public)

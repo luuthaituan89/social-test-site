@@ -53,6 +53,7 @@ class PostCreate(BaseModel):
     content: str = ""
     privacy: str = "public"
     image_url: Optional[str] = None
+    sticker: Optional[str] = Field(default=None, max_length=100)
 
 
 class CommentCreate(BaseModel):

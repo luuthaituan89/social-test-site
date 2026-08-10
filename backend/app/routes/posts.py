@@ -71,6 +71,7 @@ def serialize(post: Post, db: Session, viewer: User):
                 "id": source.id,
                 "content": source.content,
                 "image_url": source.image_url,
+                "sticker": source.sticker,
                 "media_type": source.media_type,
                 "privacy": source.privacy.value,
                 "created_at": source.created_at,
@@ -87,6 +88,7 @@ def serialize(post: Post, db: Session, viewer: User):
         "id": post.id,
         "content": post.content,
         "image_url": post.image_url,
+        "sticker": post.sticker,
         "media_type": post.media_type,
         "album": ({"id": album.id, "name": album.name} if album else None),
         "privacy": post.privacy.value,
@@ -167,13 +169,14 @@ def create_post(
         raise HTTPException(400, "Invalid privacy")
 
     content = data.content.strip()
-    if not content and not data.image_url:
+    if not content and not data.image_url and not data.sticker:
         raise HTTPException(400, "Post cannot be empty")
 
     post = Post(
         author_id=user.id,
         content=content,
         image_url=data.image_url,
+        sticker=data.sticker,
         privacy=Privacy(data.privacy),
     )
 
@@ -200,11 +203,12 @@ def update_post(
         raise HTTPException(400, "Invalid privacy")
 
     content = data.content.strip()
-    if not content and not data.image_url:
+    if not content and not data.image_url and not data.sticker:
         raise HTTPException(400, "Post cannot be empty")
 
     post.content = content
     post.image_url = data.image_url
+    post.sticker = data.sticker
     post.privacy = Privacy(data.privacy)
 
     db.commit()
