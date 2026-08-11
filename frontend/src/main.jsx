@@ -1,5 +1,5 @@
 import React,{Component,useEffect,useRef,useState}from"react";import{createRoot}from"react-dom/client";import{Search,Home,Users,MessageCircle,Bell,Settings,Image as ImageIcon,ThumbsUp,MessageSquare,Share2,Send,LogOut,Camera,UserPlus,UserCheck,ShieldBan,Menu,X,Check,MoreHorizontal,MoreVertical,Edit2,Trash2,Pin,Archive,Paperclip,Mic,Square,FileText,Download,Maximize2,Sun,Moon,Languages,Smile}from"lucide-react";import{LANGUAGES,setSiteLanguage}from"./i18n";import"./styles.css";
-const API=import.meta.env.VITE_API_URL||"http://localhost:8000",WS=API.replace(/^http/,"ws");const tok=()=>localStorage.getItem("socialn_token"),asset=u=>u?`${API}${u}`:null;
+const API=import.meta.env.VITE_API_URL||"http://localhost:8000",WS=API.replace(/^http/,"ws");const tok=()=>localStorage.getItem("socialn_token"),asset=u=>u?(/^https?:\/\//i.test(u)?u:`${API}${u}`):null;
 const REACTIONS=[{key:"like",emoji:"👍",label:"Like"},{key:"love",emoji:"❤️",label:"Love"},{key:"haha",emoji:"😂",label:"Haha"},{key:"wow",emoji:"😮",label:"Wow"},{key:"sad",emoji:"😢",label:"Sad"},{key:"angry",emoji:"😡",label:"Angry"}];
 const STICKERS=["😀","😂","🥰","😍","😎","🥳","🤩","🤗","🤔","😴","😭","😡","👍","👏","🙏","💪","❤️","💖","🔥","🎉","✨","🌈","🐶","🐱","🐼","🦊","🐸","🦄","🍕","🍰","☕","⚽","🎮","🚀","🌻","🎁"];
 function messageStickers(value){if(!value)return[];try{const parsed=JSON.parse(value);return Array.isArray(parsed)?parsed.filter(x=>typeof x==="string").slice(0,24):[value]}catch{return[value]}}
@@ -454,7 +454,7 @@ function ConversationRow({conversation,active,onOpen,onChanged,onDeleted,persona
     }catch(e){alert(e.message)}
   }
   return <div className={`conversation-row ${active?"active":""} ${conversation.archived?"archived":""} ${personalStorage?"self-vault":""}`}>
-    <button className="conversation-main" onClick={onOpen}><Avatar user={conversation.user}/><span>{conversation.user.name}{personalStorage?" (You)":""}{conversation.pinned&&!personalStorage&&<small className="pinned-label"><Pin size={11}/> Pinned</small>}<small>{conversation.last_message||({image:"Photo",video:"Video",voice:"Voice message",file:"File",sticker:"Sticker"}[conversation.last_message_type])||(personalStorage?"Personal storage":`@${conversation.user.username}`)}</small></span></button>
+    <button className="conversation-main" onClick={onOpen}><Avatar user={conversation.user}/><span>{conversation.user.name}{personalStorage?" (You)":""}{conversation.pinned&&!personalStorage&&<small className="pinned-label"><Pin size={11}/> Pinned</small>}<small>{conversation.last_message||({image:"Photo",video:"Video",voice:"Voice message",file:"File",sticker:"Sticker",gif:"GIF"}[conversation.last_message_type])||(personalStorage?"Personal storage":`@${conversation.user.username}`)}</small></span></button>
     <div className="conversation-menu-wrap"><button className="conversation-more" onClick={()=>setMenu(!menu)} aria-label="Conversation actions"><MoreVertical size={18}/></button>{menu&&<div className="conversation-menu">
       {!personalStorage&&<button onClick={()=>action("pin")}><Pin size={15}/>{conversation.pinned?"Unpin":"Pin"}</button>}
       {!personalStorage&&<button onClick={()=>action("archive")}><Archive size={15}/>{conversation.archived?"Unarchive":"Archive"}</button>}
@@ -478,6 +478,7 @@ function Chat({me,target,open,onChanged}){
   const [connected,setConnected]=useState(false);
   const [sending,setSending]=useState(false);
   const endRef=useRef(null);
+  const composeInputRef=useRef(null);
   const wsRef=useRef(null);
   const retryRef=useRef(null);
   const pingRef=useRef(null);
@@ -490,6 +491,8 @@ function Chat({me,target,open,onChanged}){
   const[isOtherTyping,setIsOtherTyping]=useState(false);
   const[previewMedia,setPreviewMedia]=useState(null);
   const[selectedStickers,setSelectedStickers]=useState([]),[showStickers,setShowStickers]=useState(false);
+  const[selectedGif,setSelectedGif]=useState(null),[showGifPicker,setShowGifPicker]=useState(false);
+  const[gifQuery,setGifQuery]=useState(""),[gifResults,setGifResults]=useState([]),[gifLoading,setGifLoading]=useState(false),[gifError,setGifError]=useState("");
 
   function lastActiveLabel(value){
     if(!value)return "Offline";
@@ -550,9 +553,23 @@ function Chat({me,target,open,onChanged}){
   }
 
   useEffect(()=>{
-    setMessages([]);setSelectedStickers([]);setShowStickers(false);
+    setMessages([]);setSelectedStickers([]);setShowStickers(false);setSelectedGif(null);setShowGifPicker(false);setGifQuery("");
     if(target?.id)loadHistory();
   },[target?.id]);
+
+  useEffect(()=>{
+    if(!showGifPicker)return;
+    let cancelled=false;
+    const timer=setTimeout(async()=>{
+      setGifLoading(true);setGifError("");
+      try{
+        const result=await api(`/api/giphy?q=${encodeURIComponent(gifQuery.trim())}`);
+        if(!cancelled)setGifResults(Array.isArray(result?.data)?result.data:[]);
+      }catch(e){if(!cancelled){setGifResults([]);setGifError(e.message)}}
+      finally{if(!cancelled)setGifLoading(false)}
+    },gifQuery.trim()?350:0);
+    return()=>{cancelled=true;clearTimeout(timer)};
+  },[showGifPicker,gifQuery]);
 
   useEffect(()=>{
     if(!target?.id)return;
@@ -659,18 +676,19 @@ function Chat({me,target,open,onChanged}){
 
   async function send(){
     const value=text.trim();
-    if(!target?.id||(!value&&!selectedStickers.length)||sending)return;
+    if(!target?.id||(!value&&!selectedStickers.length&&!selectedGif)||sending)return;
 
     setSending(true);
     setText("");
     const stickersToSend=[...selectedStickers];
-    setSelectedStickers([]);setShowStickers(false);
+    const gifToSend=selectedGif;
+    setSelectedStickers([]);setShowStickers(false);setSelectedGif(null);setShowGifPicker(false);
     emitTyping(false);
 
     try{
       const result=await api(`/api/chat/${target.id}/messages`,{
         method:"POST",
-        body:JSON.stringify({content:value,message_type:stickersToSend.length?"sticker":"text",sticker:stickersToSend.length?JSON.stringify(stickersToSend):null})
+        body:JSON.stringify(gifToSend?{content:value,message_type:"gif",attachment_url:gifToSend.url,attachment_name:gifToSend.title||"GIPHY GIF",attachment_mime:"image/gif"}:{content:value,message_type:stickersToSend.length?"sticker":"text",sticker:stickersToSend.length?JSON.stringify(stickersToSend):null})
       });
       mergeMessages(result);
       await loadHistory(true);
@@ -679,6 +697,7 @@ function Chat({me,target,open,onChanged}){
       console.error("Send message failed:",e);
       setText(value);
       setSelectedStickers(stickersToSend);
+      setSelectedGif(gifToSend);
       alert(`Could not send message: ${e.message}`);
     }finally{
       setSending(false);
@@ -739,7 +758,8 @@ function Chat({me,target,open,onChanged}){
         {x.message_type==="video"&&x.attachment_url&&<div className="chat-video-wrap"><video className="chat-video" src={asset(x.attachment_url)} controls preload="metadata" playsInline/><button className="media-expand" onClick={()=>setPreviewMedia({type:"video",url:asset(x.attachment_url),name:x.attachment_name})}><Maximize2 size={16}/> Preview</button></div>}
         {x.message_type==="voice"&&x.attachment_url&&<audio className="chat-audio" controls src={asset(x.attachment_url)}/>}
         {x.message_type==="file"&&x.attachment_url&&<a className="chat-file" href={asset(x.attachment_url)} download={x.attachment_name}><FileText size={22}/><span>{x.attachment_name||"Download file"}</span><Download size={17}/></a>}
-        {x.message_type==="sticker"?<div className={`message-with-sticker ${x.content&&x.sticker?"mixed":"sticker-only"}`}>{x.content&&x.sticker&&<span className="message-text">{x.content}</span>}<span className="message-stickers" role="img" aria-label="Stickers">{(x.stickers.length?x.stickers:messageStickers(x.sticker||x.content)).map((item,index)=><span className="message-sticker" key={`${item}-${index}`}>{item}</span>)}</span></div>:x.content&&<div>{x.content}</div>}
+        {x.message_type==="gif"&&x.attachment_url&&<button className="chat-media-button chat-gif-button" onClick={()=>setPreviewMedia({type:"image",url:asset(x.attachment_url),name:x.attachment_name})}><img className="chat-gif" src={asset(x.attachment_url)} alt={x.attachment_name||"GIF"}/><span className="gif-label">GIF</span></button>}
+        {x.message_type==="sticker"?<div className={`message-with-sticker ${x.content&&x.sticker?"mixed":"sticker-only"}`}>{x.content&&x.sticker&&<span className="message-text">{x.content}</span>}<span className="message-stickers" role="img" aria-label="Stickers">{(x.stickers.length?x.stickers:messageStickers(x.sticker||x.content)).map((item,index)=><span className="message-sticker" key={`${item}-${index}`}>{item}</span>)}</span></div>:x.content&&<div className={x.message_type==="gif"?"gif-caption":undefined}>{x.content}</div>}
         <div className="message-reaction-control"><button className="message-react-trigger" title="React">{x.my_reaction?reactionInfo(x.my_reaction).emoji:"☺"}</button><div className="message-reaction-picker">{REACTIONS.map(r=><button key={r.key} title={r.label} onClick={()=>reactMessage(x.id,r.key)}>{r.emoji}</button>)}</div></div>
         {Object.keys(x.reaction_counts||{}).length>0&&<div className="message-reaction-summary">{Object.entries(x.reaction_counts).filter(([,n])=>n>0).map(([key,n])=><span key={key}>{reactionInfo(key).emoji}{n>1?n:""}</span>)}</div>}
       </div>)}
@@ -751,9 +771,11 @@ function Chat({me,target,open,onChanged}){
       <label className="chat-tool" title="Send image or video"><ImageIcon size={19}/><input hidden type="file" accept="image/*,video/*" onChange={e=>{const f=e.target.files?.[0];uploadAttachment(f,f?.type.startsWith("video/")?"video":"image");e.target.value=""}}/></label>
       <label className="chat-tool" title="Send file"><Paperclip size={19}/><input hidden type="file" onChange={e=>{uploadAttachment(e.target.files?.[0],"file");e.target.value=""}}/></label>
       <button type="button" className={`chat-tool ${recording?"recording":""}`} title={recording?"Stop recording":"Record voice"} onClick={toggleRecording}>{recording?<Square size={17}/>:<Mic size={19}/>}</button>
-      <div className="chat-sticker-control"><button type="button" className={`chat-tool ${showStickers?"active":""}`} title="Stickers" onClick={()=>setShowStickers(!showStickers)}><Smile size={20}/></button>{showStickers&&<div className="sticker-library chat-sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Choose one or more stickers</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`chat-${item}-${index}`} className={selectedStickers.includes(item)?"selected":""} onClick={()=>{setSelectedStickers(current=>current.length<12?[...current,item]:current);emitTyping(Boolean(text.trim()))}}>{item}</button>)}</div></div>}</div>
-      <div className={`chat-compose-field ${selectedStickers.length?"has-sticker":""}`}>
+      <div className="chat-sticker-control"><button type="button" className={`chat-tool ${showStickers?"active":""}`} title="Stickers" onClick={()=>{setShowStickers(!showStickers);setShowGifPicker(false)}}><Smile size={20}/></button>{showStickers&&<div className="sticker-library chat-sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Choose one or more stickers</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`chat-${item}-${index}`} className={selectedStickers.includes(item)?"selected":""} onClick={()=>{setSelectedGif(null);setSelectedStickers(current=>current.length<12?[...current,item]:current);emitTyping(Boolean(text.trim()));setTimeout(()=>composeInputRef.current?.focus(),0)}}>{item}</button>)}</div></div>}</div>
+      <div className="chat-gif-control"><button type="button" className={`chat-tool gif-tool ${showGifPicker?"active":""}`} title="Send a GIF" onClick={()=>{setShowGifPicker(!showGifPicker);setShowStickers(false)}}>GIF</button>{showGifPicker&&<div className="gif-picker"><div className="gif-picker-head"><b>Choose a GIF</b><button type="button" className="icon-btn" onClick={()=>setShowGifPicker(false)}><X size={18}/></button></div><input autoFocus value={gifQuery} onChange={e=>setGifQuery(e.target.value)} placeholder="Search GIPHY..."/><div className="gif-grid">{gifLoading&&<div className="gif-status">Loading GIFs...</div>}{gifError&&<div className="gif-status error">{gifError}</div>}{!gifLoading&&!gifError&&!gifResults.length&&<div className="gif-status">No GIFs found.</div>}{gifResults.map(item=><button type="button" key={item.id} title={item.title} onClick={()=>{setSelectedGif(item);setSelectedStickers([]);setShowGifPicker(false);setTimeout(()=>composeInputRef.current?.focus(),0)}}><img src={item.preview_url} alt={item.title} loading="lazy"/></button>)}</div><div className="giphy-credit">Powered by GIPHY</div></div>}</div>
+      <div className={`chat-compose-field ${selectedStickers.length||selectedGif?"has-sticker":""}`}>
         <input
+          ref={composeInputRef}
           className={text?"has-text":""}
           style={text?{width:`${Math.min(42,Math.max(3,text.length+1))}ch`}:undefined}
           value={text}
@@ -767,9 +789,10 @@ function Chat({me,target,open,onChanged}){
           }}
         />
         {selectedStickers.length>0&&<div className="chat-sticker-previews" title="Selected stickers">{selectedStickers.map((item,index)=><span className="chat-sticker-preview" key={`${item}-${index}`}><i>{item}</i><button type="button" onClick={()=>setSelectedStickers(current=>current.filter((_,position)=>position!==index))} aria-label="Remove sticker"><X size={10}/></button></span>)}</div>}
+        {selectedGif&&<div className="selected-gif" title={selectedGif.title}><img src={selectedGif.preview_url} alt={selectedGif.title||"Selected GIF"}/><button type="button" onClick={()=>setSelectedGif(null)} aria-label="Remove GIF"><X size={12}/></button><span>GIF</span></div>}
         <span className="chat-compose-spacer"/>
       </div>
-      <button type="button" className="primary" disabled={sending||(!text.trim()&&!selectedStickers.length)} onClick={send}>
+      <button type="button" className="primary" disabled={sending||(!text.trim()&&!selectedStickers.length&&!selectedGif)} onClick={send}>
         <Send size={18}/>
       </button>
     </div>

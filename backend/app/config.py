@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 1440
     cors_origins: str = "http://localhost:5173"
     upload_dir: str = "/app/uploads"
+    giphy_api_key: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

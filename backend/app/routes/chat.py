@@ -5,6 +5,7 @@ from jose import jwt, JWTError
 from pathlib import Path
 import uuid
 import json
+from urllib.parse import urlparse
 
 from ..database import get_db, SessionLocal
 from ..models import User, Conversation, Message, MessageReaction, Block
@@ -377,7 +378,7 @@ async def send_message(
         raise HTTPException(403, "You cannot message this user")
 
     content = data.content.strip()
-    if data.message_type not in {"text", "image", "video", "file", "voice", "sticker"}:
+    if data.message_type not in {"text", "image", "video", "file", "voice", "sticker", "gif"}:
         raise HTTPException(400, "Invalid message type")
     if not content and not data.attachment_url and not data.sticker:
         raise HTTPException(400, "Message cannot be empty")
@@ -387,6 +388,10 @@ async def send_message(
         raise HTTPException(400, "Invalid sticker")
     if data.message_type not in {"text", "sticker"} and not data.attachment_url:
         raise HTTPException(400, "Attachment is required")
+    if data.message_type == "gif":
+        hostname = (urlparse(data.attachment_url or "").hostname or "").lower()
+        if hostname != "giphy.com" and not hostname.endswith(".giphy.com"):
+            raise HTTPException(400, "Invalid GIPHY URL")
 
     conv = get_or_create_conversation(db, user.id, other_user_id)
     set_conversation_state(conv, user.id, "archived", False)

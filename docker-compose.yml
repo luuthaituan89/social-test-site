@@ -28,6 +28,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-1440}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      GIPHY_API_KEY: ${GIPHY_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
