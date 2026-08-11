@@ -44,13 +44,13 @@ function PostComposer({onCreated}){
   const[content,setContent]=useState("");
   const[privacy,setPrivacy]=useState("public");
   const[file,setFile]=useState(null);
-  const[sticker,setSticker]=useState(null),[showStickers,setShowStickers]=useState(false);
+  const[stickers,setStickers]=useState([]),[showStickers,setShowStickers]=useState(false);
   const[busy,setBusy]=useState(false);
   const[error,setError]=useState("");
 
   async function submit(e){
     e.preventDefault();
-    if(!content.trim()&&!file&&!sticker)return;
+    if(!content.trim()&&!file&&!stickers.length)return;
     setBusy(true);setError("");
     try{
       let image_url=null;
@@ -58,22 +58,21 @@ function PostComposer({onCreated}){
         const body=new FormData();body.append("file",file);
         image_url=(await api("/api/upload",{method:"POST",body})).url;
       }
-      const post=await api("/api/posts",{method:"POST",body:JSON.stringify({content,privacy,image_url,sticker})});
-      setContent("");setFile(null);setSticker(null);setShowStickers(false);onCreated?.(post);
+      const post=await api("/api/posts",{method:"POST",body:JSON.stringify({content,privacy,image_url,sticker:stickers.length?JSON.stringify(stickers):null})});
+      setContent("");setFile(null);setStickers([]);setShowStickers(false);onCreated?.(post);
     }catch(e){setError(e.message)}finally{setBusy(false)}
   }
 
   return <form className="card composer" onSubmit={submit}>
     <div className="composer-title">Create post</div>
-    <div className="composer-row"><textarea value={content} onChange={e=>setContent(e.target.value)} placeholder="What's on your mind?"/></div>
+    <div className={`composer-row composer-rich-row ${stickers.length?"has-stickers":""}`}><textarea className={content?"has-text":""} style={content?{width:`${Math.min(52,Math.max(3,content.split("\n").reduce((longest,line)=>Math.max(longest,line.length),0)))}ch`}:undefined} value={content} onChange={e=>setContent(e.target.value)} placeholder="What's on your mind?"/>{stickers.length>0&&<div className="composer-sticker-previews">{stickers.map((item,index)=><span className="composer-sticker-preview" key={`${item}-${index}`}><i>{item}</i><button type="button" onClick={()=>setStickers(current=>current.filter((_,position)=>position!==index))} aria-label="Remove sticker"><X size={8}/></button></span>)}</div>}<span className="composer-rich-spacer"/></div>
     {file&&<div className="file-chip">{file.name}</div>}
-    {sticker&&<div className="selected-sticker"><span>{sticker}</span><button type="button" onClick={()=>setSticker(null)} aria-label="Remove sticker"><X size={17}/></button></div>}
     {error&&<div className="error">{error}</div>}
     <div className="composer-actions">
       <label className="action"><ImageIcon size={18}/> Photo<input hidden type="file" accept="image/*" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
-      <div className="sticker-control"><button type="button" className={`action sticker-trigger ${showStickers?"active":""}`} onClick={()=>setShowStickers(!showStickers)}><Smile size={19}/> Stickers</button>{showStickers&&<div className="sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Choose one for your post</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`${item}-${index}`} className={sticker===item?"selected":""} onClick={()=>{setSticker(item);setShowStickers(false)}}>{item}</button>)}</div></div>}</div>
+      <div className="sticker-control"><button type="button" className={`action sticker-trigger ${showStickers?"active":""}`} onClick={()=>setShowStickers(!showStickers)}><Smile size={19}/> Stickers</button>{showStickers&&<div className="sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Choose one or more stickers</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`${item}-${index}`} className={stickers.includes(item)?"selected":""} onClick={()=>setStickers(current=>[...current,item])}>{item}</button>)}</div></div>}</div>
       <select value={privacy} onChange={e=>setPrivacy(e.target.value)}><option value="public">Public</option><option value="friends">Friends</option><option value="only_me">Only me</option></select>
-      <button className="primary" disabled={busy||(!content.trim()&&!file&&!sticker)}>{busy?"Posting...":"Post"}</button>
+      <button className="primary" disabled={busy||(!content.trim()&&!file&&!stickers.length)}>{busy?"Posting...":"Post"}</button>
     </div>
   </form>
 }
@@ -97,8 +96,8 @@ function PostCard({post,me,onOpenProfile,onUpdated,onDeleted}){
     <div className="post-head"><Avatar user={post.author} onClick={()=>onOpenProfile?.(post.author.id)}/><div className="post-author"><button className="name-link" onClick={()=>onOpenProfile?.(post.author.id)}><b>{post.author.name}</b></button><div className="privacy-line">{privacyLabel} · {new Date(post.created_at).toLocaleString()}</div></div>
       {post.is_owner&&<div className="post-menu-wrap"><button className="icon-btn" onClick={()=>setMenu(!menu)}><MoreHorizontal size={20}/></button>{menu&&<div className="post-menu"><button onClick={()=>{setEditing(true);setMenu(false)}}><Edit2 size={16}/> Edit</button><button className="danger-link" onClick={remove}><Trash2 size={16}/> Delete</button></div>}</div>}
     </div>
-    {editing?<div className="post-edit"><textarea value={draft.content} onChange={e=>setDraft({...draft,content:e.target.value})}/><select value={draft.privacy} onChange={e=>setDraft({...draft,privacy:e.target.value})}><option value="public">Public</option><option value="friends">Friends</option><option value="only_me">Only me</option></select><div className="edit-actions"><button className="secondary" onClick={()=>setEditing(false)}>Cancel</button><button className="primary" disabled={busy} onClick={saveEdit}>Save</button></div></div>:<>{post.content&&<div className="post-content">{post.content}</div>}{post.sticker&&<div className="post-sticker" role="img" aria-label="Sticker">{post.sticker}</div>}{post.album&&<button className="post-album-link" onClick={openPostAlbum}><ImageIcon size={15}/> {post.album.name}</button>}{post.image_url&&(post.media_type==="video"?<video className="post-image post-video" src={asset(post.image_url)} controls preload="metadata" playsInline/>:<img className="post-image" src={asset(post.image_url)} alt="Post"/>)}</>}
-    {post.shared_post&&<div className="shared-card"><div className="shared-author"><Avatar user={post.shared_post.author} size={34}/><b>{post.shared_post.author.name}</b></div>{post.shared_post.content&&<div className="shared-content">{post.shared_post.content}</div>}{post.shared_post.sticker&&<div className="post-sticker shared-sticker" role="img" aria-label="Sticker">{post.shared_post.sticker}</div>}{post.shared_post.image_url&&(post.shared_post.media_type==="video"?<video className="shared-image" src={asset(post.shared_post.image_url)} controls preload="metadata"/>:<img className="shared-image" src={asset(post.shared_post.image_url)} alt="Shared post"/>)}</div>}
+    {editing?<div className="post-edit"><textarea value={draft.content} onChange={e=>setDraft({...draft,content:e.target.value})}/><select value={draft.privacy} onChange={e=>setDraft({...draft,privacy:e.target.value})}><option value="public">Public</option><option value="friends">Friends</option><option value="only_me">Only me</option></select><div className="edit-actions"><button className="secondary" onClick={()=>setEditing(false)}>Cancel</button><button className="primary" disabled={busy} onClick={saveEdit}>Save</button></div></div>:<><div className={`post-rich-content ${post.content?"mixed":"sticker-only"}`}>{post.content&&<div className="post-content">{post.content}</div>}{post.sticker&&<div className="post-stickers" role="img" aria-label="Stickers">{messageStickers(post.sticker).map((item,index)=><span className="post-sticker" key={`${item}-${index}`}>{item}</span>)}</div>}</div>{post.album&&<button className="post-album-link" onClick={openPostAlbum}><ImageIcon size={15}/> {post.album.name}</button>}{post.image_url&&(post.media_type==="video"?<video className="post-image post-video" src={asset(post.image_url)} controls preload="metadata" playsInline/>:<img className="post-image" src={asset(post.image_url)} alt="Post"/>)}</>}
+    {post.shared_post&&<div className="shared-card"><div className="shared-author"><Avatar user={post.shared_post.author} size={34}/><b>{post.shared_post.author.name}</b></div><div className={`post-rich-content ${post.shared_post.content?"mixed":"sticker-only"}`}>{post.shared_post.content&&<div className="shared-content">{post.shared_post.content}</div>}{post.shared_post.sticker&&<div className="post-stickers shared-stickers" role="img" aria-label="Stickers">{messageStickers(post.shared_post.sticker).map((item,index)=><span className="post-sticker" key={`${item}-${index}`}>{item}</span>)}</div>}</div>{post.shared_post.image_url&&(post.shared_post.media_type==="video"?<video className="shared-image" src={asset(post.shared_post.image_url)} controls preload="metadata"/>:<img className="shared-image" src={asset(post.shared_post.image_url)} alt="Shared post"/>)}</div>}
     <div className="post-stats"><span className="reaction-summary">{Object.entries(post.reaction_counts||{}).filter(([,n])=>n>0).map(([key])=><span key={key}>{reactionInfo(key).emoji}</span>)} {post.likes_count||0} reactions</span><span>{post.comments?.length||0} comments</span></div>
     <div className="post-buttons"><div className="reaction-wrap"><button className={post.my_reaction?"active":""} onClick={()=>react(post.my_reaction||"like")}><span>{post.my_reaction?reactionInfo(post.my_reaction).emoji:<ThumbsUp size={18}/>}</span> {post.my_reaction?reactionInfo(post.my_reaction).label:"Like"}</button><div className="reaction-picker">{REACTIONS.map(r=><button key={r.key} title={r.label} onClick={()=>react(r.key)}>{r.emoji}</button>)}</div></div><button onClick={()=>document.getElementById(`comment-${post.id}`)?.focus()}><MessageSquare size={18}/> Comment</button><button onClick={share}><Share2 size={18}/> Share</button></div>
     <div>{(post.comments||[]).map(c=><div className="comment" key={c.id}><Avatar user={c.author} size={32}/><div className="comment-body"><b>{c.author.name}</b><div>{c.content}</div></div></div>)}</div>

@@ -33,6 +33,7 @@ def ensure_profile_columns():
         "ALTER TABLE posts ADD COLUMN media_type VARCHAR(20) NOT NULL DEFAULT 'image'",
         "ALTER TABLE posts ADD COLUMN album_id INT NULL",
         "ALTER TABLE posts ADD COLUMN sticker VARCHAR(100) NULL",
+        "ALTER TABLE posts MODIFY COLUMN sticker TEXT NULL",
     ]
     with engine.begin() as conn:
         for statement in statements:
