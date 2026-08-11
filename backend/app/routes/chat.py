@@ -85,6 +85,7 @@ def serialize_message(msg: Message, other_user_id: int) -> dict:
         "attachment_url": msg.attachment_url,
         "attachment_name": msg.attachment_name,
         "attachment_mime": msg.attachment_mime,
+        "sticker": msg.sticker,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
     }
 
@@ -353,6 +354,7 @@ def messages(
         "attachment_url": m.attachment_url,
         "attachment_name": m.attachment_name,
         "attachment_mime": m.attachment_mime,
+        "sticker": m.sticker,
         "reaction_counts": reaction_counts,
         "my_reaction": my_reaction,
         "created_at": m.created_at.isoformat() if m.created_at else None,
@@ -375,11 +377,15 @@ async def send_message(
         raise HTTPException(403, "You cannot message this user")
 
     content = data.content.strip()
-    if data.message_type not in {"text", "image", "video", "file", "voice"}:
+    if data.message_type not in {"text", "image", "video", "file", "voice", "sticker"}:
         raise HTTPException(400, "Invalid message type")
-    if not content and not data.attachment_url:
+    if not content and not data.attachment_url and not data.sticker:
         raise HTTPException(400, "Message cannot be empty")
-    if data.message_type != "text" and not data.attachment_url:
+    if data.sticker and len(data.sticker) > 2000:
+        raise HTTPException(400, "Invalid sticker")
+    if data.message_type == "sticker" and (not data.sticker or data.attachment_url):
+        raise HTTPException(400, "Invalid sticker")
+    if data.message_type not in {"text", "sticker"} and not data.attachment_url:
         raise HTTPException(400, "Attachment is required")
 
     conv = get_or_create_conversation(db, user.id, other_user_id)
@@ -395,6 +401,7 @@ async def send_message(
         attachment_url=data.attachment_url,
         attachment_name=data.attachment_name,
         attachment_mime=data.attachment_mime,
+        sticker=data.sticker,
         is_read=False,
     )
     db.add(msg)
@@ -425,6 +432,7 @@ async def send_message(
         "attachment_url": msg.attachment_url,
         "attachment_name": msg.attachment_name,
         "attachment_mime": msg.attachment_mime,
+        "sticker": msg.sticker,
         "reaction_counts": {},
         "my_reaction": None,
         "created_at": msg.created_at.isoformat(),

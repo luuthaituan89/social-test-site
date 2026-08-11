@@ -27,6 +27,8 @@ def ensure_profile_columns():
         "ALTER TABLE messages ADD COLUMN attachment_url VARCHAR(500) NULL",
         "ALTER TABLE messages ADD COLUMN attachment_name VARCHAR(255) NULL",
         "ALTER TABLE messages ADD COLUMN attachment_mime VARCHAR(120) NULL",
+        "ALTER TABLE messages ADD COLUMN sticker VARCHAR(100) NULL",
+        "ALTER TABLE messages MODIFY COLUMN sticker TEXT NULL",
         "ALTER TABLE likes ADD COLUMN reaction VARCHAR(20) NOT NULL DEFAULT 'like'",
         "ALTER TABLE posts ADD COLUMN media_type VARCHAR(20) NOT NULL DEFAULT 'image'",
         "ALTER TABLE posts ADD COLUMN album_id INT NULL",

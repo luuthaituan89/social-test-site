@@ -142,6 +142,7 @@ class Message(Base):
     attachment_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     attachment_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_mime: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    sticker: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
 

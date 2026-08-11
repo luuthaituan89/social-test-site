@@ -70,6 +70,7 @@ class MessageCreate(BaseModel):
     attachment_url: Optional[str] = None
     attachment_name: Optional[str] = Field(default=None, max_length=255)
     attachment_mime: Optional[str] = Field(default=None, max_length=120)
+    sticker: Optional[str] = Field(default=None, max_length=2000)
 
 
 class PasswordChange(BaseModel):
