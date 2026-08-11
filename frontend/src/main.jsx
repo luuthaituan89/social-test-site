@@ -41,6 +41,7 @@ function LanguagePicker({value,onChange,compact=false}){return <div className={`
 function Login({onLogin,language,onLanguageChange}){const[mode,setMode]=useState("login"),[f,setF]=useState({email:"",username:"",name:"",password:""}),[err,setErr]=useState("");async function sub(e){e.preventDefault();try{const d=await api(`/api/auth/${mode}`,{method:"POST",body:JSON.stringify(f)});localStorage.setItem("socialn_token",d.access_token);onLogin(d.user)}catch(e){setErr(e.message)}}return <div className="auth-shell"><div className="auth-stack"><div className="auth-card"><div className="brand big">Social<span>N</span></div><form onSubmit={sub}>{mode==="register"&&<><input placeholder="Full name" onChange={e=>setF({...f,name:e.target.value})}/><input placeholder="Username" onChange={e=>setF({...f,username:e.target.value})}/></>}<input type="email" placeholder="Email" onChange={e=>setF({...f,email:e.target.value})}/><input type="password" placeholder="Password" onChange={e=>setF({...f,password:e.target.value})}/>{err&&<div className="error">{err}</div>}<button className="primary wide">{mode==="login"?"Log in":"Register"}</button></form><button className="link-btn" onClick={()=>setMode(mode==="login"?"register":"login")}>{mode==="login"?"Create account":"Back to login"}</button></div><LanguagePicker compact value={language} onChange={onLanguageChange}/></div></div>}
 
 function PostComposer({onCreated}){
+  const composerInputRef=useRef(null);
   const[content,setContent]=useState("");
   const[privacy,setPrivacy]=useState("public");
   const[file,setFile]=useState(null);
@@ -62,6 +63,16 @@ function PostComposer({onCreated}){
     return()=>{cancelled=true;clearTimeout(timer)};
   },[showGifPicker,gifQuery]);
 
+  function insertComposerSticker(item){
+    const input=composerInputRef.current;
+    const start=input?.selectionStart??content.length;
+    const end=input?.selectionEnd??start;
+    const next=`${content.slice(0,start)}${item}${content.slice(end)}`;
+    const nextCaret=start+item.length;
+    setSelectedGif(null);setContent(next);
+    setTimeout(()=>{composerInputRef.current?.focus();composerInputRef.current?.setSelectionRange(nextCaret,nextCaret)},0);
+  }
+
   async function submit(e){
     e.preventDefault();
     if(!content.trim()&&!file&&!stickers.length&&!selectedGif)return;
@@ -80,13 +91,13 @@ function PostComposer({onCreated}){
 
   return <form className="card composer" onSubmit={submit}>
     <div className="composer-title">Create post</div>
-    <div className={`composer-row composer-rich-row ${stickers.length?"has-stickers":""}`}><textarea className={content?"has-text":""} style={content?{width:`${Math.min(52,Math.max(3,content.split("\n").reduce((longest,line)=>Math.max(longest,line.length),0)))}ch`}:undefined} value={content} onChange={e=>setContent(e.target.value)} placeholder="What's on your mind?"/>{stickers.length>0&&<div className="composer-sticker-previews">{stickers.map((item,index)=><span className="composer-sticker-preview" key={`${item}-${index}`}><i>{item}</i><button type="button" onClick={()=>setStickers(current=>current.filter((_,position)=>position!==index))} aria-label="Remove sticker"><X size={8}/></button></span>)}</div>}<span className="composer-rich-spacer"/></div>
+    <div className={`composer-row composer-rich-row ${stickers.length?"has-stickers":""}`}><textarea ref={composerInputRef} className={content?"has-text":""} style={content?{width:`${Math.min(54,Math.max(5,content.split("\n").reduce((longest,line)=>Math.max(longest,line.length),0)+2))}ch`}:undefined} value={content} onChange={e=>setContent(e.target.value)} onKeyDown={e=>{if(e.key==="Backspace"&&!content&&stickers.length){e.preventDefault();setStickers(current=>current.slice(0,-1))}}} placeholder={stickers.length?"":"What's on your mind?"}/>{stickers.length>0&&<div className="composer-sticker-previews">{stickers.map((item,index)=><span className="composer-sticker-preview" key={`${item}-${index}`}><i>{item}</i><button type="button" onClick={()=>setStickers(current=>current.filter((_,position)=>position!==index))} aria-label="Remove sticker"><X size={8}/></button></span>)}</div>}<span className="composer-rich-spacer"/></div>
     {file&&<div className="file-chip">{file.name}</div>}
     {selectedGif&&<div className="composer-gif-preview"><img src={selectedGif.preview_url} alt={selectedGif.title||"Selected GIF"}/><button type="button" onClick={()=>setSelectedGif(null)} aria-label="Remove GIF"><X size={17}/></button><span>GIF</span></div>}
     {error&&<div className="error">{error}</div>}
     <div className="composer-actions">
       <label className="action"><ImageIcon size={18}/> Photo<input hidden type="file" accept="image/*" onChange={e=>{setFile(e.target.files?.[0]||null);setSelectedGif(null)}}/></label>
-      <div className="sticker-control"><button type="button" className={`action sticker-trigger ${showStickers?"active":""}`} onClick={()=>{setShowStickers(!showStickers);setShowGifPicker(false)}}><Smile size={19}/> Stickers</button>{showStickers&&<div className="sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Choose one or more stickers</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`${item}-${index}`} className={stickers.includes(item)?"selected":""} onClick={()=>{setSelectedGif(null);setStickers(current=>[...current,item])}}>{item}</button>)}</div></div>}</div>
+      <div className="sticker-control"><button type="button" className={`action sticker-trigger ${showStickers?"active":""}`} onClick={()=>{setShowStickers(!showStickers);setShowGifPicker(false)}}><Smile size={19}/> Stickers</button>{showStickers&&<div className="sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Insert stickers like normal text</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`${item}-${index}`} onClick={()=>insertComposerSticker(item)}>{item}</button>)}</div></div>}</div>
       <div className="composer-gif-control"><button type="button" className={`action composer-gif-trigger ${showGifPicker?"active":""}`} onClick={()=>{setShowGifPicker(!showGifPicker);setShowStickers(false)}}>GIF</button>{showGifPicker&&<div className="gif-picker composer-gif-picker"><div className="gif-picker-head"><b>Choose a GIF</b><button type="button" className="icon-btn" onClick={()=>setShowGifPicker(false)}><X size={18}/></button></div><input autoFocus value={gifQuery} onChange={e=>setGifQuery(e.target.value)} placeholder="Search GIPHY..."/><div className="gif-grid">{gifLoading&&<div className="gif-status">Loading GIFs...</div>}{gifError&&<div className="gif-status error">{gifError}</div>}{!gifLoading&&!gifError&&!gifResults.length&&<div className="gif-status">No GIFs found.</div>}{gifResults.map(item=><button type="button" key={item.id} title={item.title} onClick={()=>{setSelectedGif(item);setFile(null);setStickers([]);setShowGifPicker(false)}}><img src={item.preview_url} alt={item.title} loading="lazy"/></button>)}</div><div className="giphy-credit">Powered by GIPHY</div></div>}</div>
       <select value={privacy} onChange={e=>setPrivacy(e.target.value)}><option value="public">Public</option><option value="friends">Friends</option><option value="only_me">Only me</option></select>
       <button className="primary" disabled={busy||(!content.trim()&&!file&&!stickers.length&&!selectedGif)}>{busy?"Posting...":"Post"}</button>
@@ -558,6 +569,10 @@ function Chat({me,target,open,onChanged}){
     });
   }
 
+  function scrollChatToEnd(behavior="smooth"){
+    requestAnimationFrame(()=>endRef.current?.scrollIntoView?.({behavior,block:"end"}));
+  }
+
   async function loadHistory(silent=false){
     if(!target?.id)return;
     try{
@@ -597,7 +612,7 @@ function Chat({me,target,open,onChanged}){
   },[target?.id]);
 
   useEffect(()=>{
-    endRef.current?.scrollIntoView?.({behavior:"smooth",block:"end"});
+    scrollChatToEnd();
   },[messages.length,isOtherTyping]);
 
   // REST polling fallback: guarantees incoming messages even if WebSocket/proxy fails.
@@ -729,6 +744,16 @@ function Chat({me,target,open,onChanged}){
     if(value.trim())typingStopRef.current=setTimeout(()=>emitTyping(false),1200);
   }
 
+  function insertChatSticker(item){
+    const input=composeInputRef.current;
+    const start=input?.selectionStart??text.length;
+    const end=input?.selectionEnd??start;
+    const next=`${text.slice(0,start)}${item}${text.slice(end)}`;
+    const nextCaret=start+item.length;
+    setSelectedGif(null);setSelectedStickers([]);changeText(next);
+    setTimeout(()=>{composeInputRef.current?.focus();composeInputRef.current?.setSelectionRange(nextCaret,nextCaret)},0);
+  }
+
   async function uploadAttachment(file,forcedType){
     if(!target?.id||!file||sending)return;
     setSending(true);
@@ -771,11 +796,11 @@ function Chat({me,target,open,onChanged}){
 
     <div className="messages">
       {messages.map(x=><div key={x.id} className={`bubble ${x.sender_id===Number(me.id)?"mine":""} attachment-bubble`}>
-        {x.message_type==="image"&&x.attachment_url&&<button className="chat-media-button" onClick={()=>setPreviewMedia({type:"image",url:asset(x.attachment_url),name:x.attachment_name})}><img className="chat-image" src={asset(x.attachment_url)} alt={x.attachment_name||"Image"}/><span className="media-hover-icon"><Maximize2 size={20}/></span></button>}
+        {x.message_type==="image"&&x.attachment_url&&<button className="chat-media-button" onClick={()=>setPreviewMedia({type:"image",url:asset(x.attachment_url),name:x.attachment_name})}><img className="chat-image" src={asset(x.attachment_url)} alt={x.attachment_name||"Image"} onLoad={()=>scrollChatToEnd("auto")}/><span className="media-hover-icon"><Maximize2 size={20}/></span></button>}
         {x.message_type==="video"&&x.attachment_url&&<div className="chat-video-wrap"><video className="chat-video" src={asset(x.attachment_url)} controls preload="metadata" playsInline/><button className="media-expand" onClick={()=>setPreviewMedia({type:"video",url:asset(x.attachment_url),name:x.attachment_name})}><Maximize2 size={16}/> Preview</button></div>}
         {x.message_type==="voice"&&x.attachment_url&&<audio className="chat-audio" controls src={asset(x.attachment_url)}/>}
         {x.message_type==="file"&&x.attachment_url&&<a className="chat-file" href={asset(x.attachment_url)} download={x.attachment_name}><FileText size={22}/><span>{x.attachment_name||"Download file"}</span><Download size={17}/></a>}
-        {x.message_type==="gif"&&x.attachment_url&&<button className="chat-media-button chat-gif-button" onClick={()=>setPreviewMedia({type:"image",url:asset(x.attachment_url),name:x.attachment_name})}><img className="chat-gif" src={asset(x.attachment_url)} alt={x.attachment_name||"GIF"}/><span className="gif-label">GIF</span></button>}
+        {x.message_type==="gif"&&x.attachment_url&&<button className="chat-media-button chat-gif-button" onClick={()=>setPreviewMedia({type:"image",url:asset(x.attachment_url),name:x.attachment_name})}><img className="chat-gif" src={asset(x.attachment_url)} alt={x.attachment_name||"GIF"} onLoad={()=>scrollChatToEnd("auto")}/><span className="gif-label">GIF</span></button>}
         {x.message_type==="sticker"?<div className={`message-with-sticker ${x.content&&x.sticker?"mixed":"sticker-only"}`}>{x.content&&x.sticker&&<span className="message-text">{x.content}</span>}<span className="message-stickers" role="img" aria-label="Stickers">{(x.stickers.length?x.stickers:messageStickers(x.sticker||x.content)).map((item,index)=><span className="message-sticker" key={`${item}-${index}`}>{item}</span>)}</span></div>:x.content&&<div className={x.message_type==="gif"?"gif-caption":undefined}>{x.content}</div>}
         <div className="message-reaction-control"><button className="message-react-trigger" title="React">{x.my_reaction?reactionInfo(x.my_reaction).emoji:"☺"}</button><div className="message-reaction-picker">{REACTIONS.map(r=><button key={r.key} title={r.label} onClick={()=>reactMessage(x.id,r.key)}>{r.emoji}</button>)}</div></div>
         {Object.keys(x.reaction_counts||{}).length>0&&<div className="message-reaction-summary">{Object.entries(x.reaction_counts).filter(([,n])=>n>0).map(([key,n])=><span key={key}>{reactionInfo(key).emoji}{n>1?n:""}</span>)}</div>}
@@ -788,7 +813,7 @@ function Chat({me,target,open,onChanged}){
       <label className="chat-tool" title="Send image or video"><ImageIcon size={19}/><input hidden type="file" accept="image/*,video/*" onChange={e=>{const f=e.target.files?.[0];uploadAttachment(f,f?.type.startsWith("video/")?"video":"image");e.target.value=""}}/></label>
       <label className="chat-tool" title="Send file"><Paperclip size={19}/><input hidden type="file" onChange={e=>{uploadAttachment(e.target.files?.[0],"file");e.target.value=""}}/></label>
       <button type="button" className={`chat-tool ${recording?"recording":""}`} title={recording?"Stop recording":"Record voice"} onClick={toggleRecording}>{recording?<Square size={17}/>:<Mic size={19}/>}</button>
-      <div className="chat-sticker-control"><button type="button" className={`chat-tool ${showStickers?"active":""}`} title="Stickers" onClick={()=>{setShowStickers(!showStickers);setShowGifPicker(false)}}><Smile size={20}/></button>{showStickers&&<div className="sticker-library chat-sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Choose one or more stickers</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`chat-${item}-${index}`} className={selectedStickers.includes(item)?"selected":""} onClick={()=>{setSelectedGif(null);setSelectedStickers(current=>current.length<12?[...current,item]:current);emitTyping(Boolean(text.trim()));setTimeout(()=>composeInputRef.current?.focus(),0)}}>{item}</button>)}</div></div>}</div>
+      <div className="chat-sticker-control"><button type="button" className={`chat-tool ${showStickers?"active":""}`} title="Stickers" onClick={()=>{setShowStickers(!showStickers);setShowGifPicker(false)}}><Smile size={20}/></button>{showStickers&&<div className="sticker-library chat-sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Insert stickers like normal text</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`chat-${item}-${index}`} onClick={()=>insertChatSticker(item)}>{item}</button>)}</div></div>}</div>
       <div className="chat-gif-control"><button type="button" className={`chat-tool gif-tool ${showGifPicker?"active":""}`} title="Send a GIF" onClick={()=>{setShowGifPicker(!showGifPicker);setShowStickers(false)}}>GIF</button>{showGifPicker&&<div className="gif-picker"><div className="gif-picker-head"><b>Choose a GIF</b><button type="button" className="icon-btn" onClick={()=>setShowGifPicker(false)}><X size={18}/></button></div><input autoFocus value={gifQuery} onChange={e=>setGifQuery(e.target.value)} placeholder="Search GIPHY..."/><div className="gif-grid">{gifLoading&&<div className="gif-status">Loading GIFs...</div>}{gifError&&<div className="gif-status error">{gifError}</div>}{!gifLoading&&!gifError&&!gifResults.length&&<div className="gif-status">No GIFs found.</div>}{gifResults.map(item=><button type="button" key={item.id} title={item.title} onClick={()=>{setSelectedGif(item);setSelectedStickers([]);setShowGifPicker(false);setTimeout(()=>composeInputRef.current?.focus(),0)}}><img src={item.preview_url} alt={item.title} loading="lazy"/></button>)}</div><div className="giphy-credit">Powered by GIPHY</div></div>}</div>
       <div className={`chat-compose-field ${selectedStickers.length||selectedGif?"has-sticker":""}`}>
         <input
