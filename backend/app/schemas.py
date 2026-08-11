@@ -53,6 +53,7 @@ class PostCreate(BaseModel):
     content: str = ""
     privacy: str = "public"
     image_url: Optional[str] = None
+    media_type: Optional[str] = None
     sticker: Optional[str] = Field(default=None, max_length=4000)
 
 

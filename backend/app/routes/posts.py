@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -171,11 +172,19 @@ def create_post(
     content = data.content.strip()
     if not content and not data.image_url and not data.sticker:
         raise HTTPException(400, "Post cannot be empty")
+    media_type = data.media_type or "image"
+    if media_type not in {"image", "video", "gif"}:
+        raise HTTPException(400, "Invalid media type")
+    if media_type == "gif":
+        hostname = (urlparse(data.image_url or "").hostname or "").lower()
+        if hostname != "giphy.com" and not hostname.endswith(".giphy.com"):
+            raise HTTPException(400, "Invalid GIPHY URL")
 
     post = Post(
         author_id=user.id,
         content=content,
         image_url=data.image_url,
+        media_type=media_type,
         sticker=data.sticker,
         privacy=Privacy(data.privacy),
     )
@@ -205,9 +214,17 @@ def update_post(
     content = data.content.strip()
     if not content and not data.image_url and not data.sticker:
         raise HTTPException(400, "Post cannot be empty")
+    media_type = data.media_type or post.media_type or "image"
+    if media_type not in {"image", "video", "gif"}:
+        raise HTTPException(400, "Invalid media type")
+    if media_type == "gif":
+        hostname = (urlparse(data.image_url or "").hostname or "").lower()
+        if hostname != "giphy.com" and not hostname.endswith(".giphy.com"):
+            raise HTTPException(400, "Invalid GIPHY URL")
 
     post.content = content
     post.image_url = data.image_url
+    post.media_type = media_type
     post.sticker = data.sticker
     post.privacy = Privacy(data.privacy)
 
