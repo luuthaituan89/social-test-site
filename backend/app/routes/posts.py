@@ -9,6 +9,7 @@ from ..auth import get_current_user
 from ..utils import are_friends, is_blocked_either_way
 from ..notifications import create_notification
 from .notifications import notification_ws
+from ..activity import log_activity
 
 router = APIRouter(prefix="/api/posts", tags=["Posts"])
 REACTIONS = {"like": ("👍", "liked"), "love": ("❤️", "loved"), "haha": ("😂", "reacted to"), "wow": ("😮", "reacted to"), "sad": ("😢", "reacted to"), "angry": ("😡", "reacted to")}
@@ -190,6 +191,8 @@ def create_post(
     )
 
     db.add(post)
+    db.flush()
+    log_activity(db, user.id, "posts", "post_created", "Created a new post", entity_type="post", entity_id=post.id, details={"privacy": data.privacy, "media_type": media_type})
     db.commit()
     db.refresh(post)
     return serialize(post, db, user)
@@ -287,12 +290,16 @@ async def toggle_like(
         if like.reaction == data.reaction:
             db.delete(like)
             my_reaction = None
+            log_activity(db, user.id, "posts", "reaction_removed", "Removed a reaction from a post", entity_type="post", entity_id=post.id, target_user_id=post.author_id)
         else:
             like.reaction = data.reaction
             my_reaction = data.reaction
     else:
         db.add(Like(post_id=post_id, user_id=user.id, reaction=data.reaction))
         my_reaction = data.reaction
+
+    if my_reaction:
+        log_activity(db, user.id, "posts", "post_reaction", f"Reacted {REACTIONS[my_reaction][0]} to {post.author.name}'s post", entity_type="post", entity_id=post.id, target_user_id=post.author_id, details={"reaction": my_reaction})
 
     if my_reaction:
         emoji, verb = REACTIONS[my_reaction]
@@ -336,6 +343,7 @@ def comment(
     )
     db.add(row)
     db.flush()
+    log_activity(db, user.id, "posts", "post_comment", f"Commented on {post.author.name}'s post: {content[:160]}", entity_type="post", entity_id=post.id, target_user_id=post.author_id, details={"comment_id": row.id, "content": content})
 
     create_notification(
         db,
@@ -391,6 +399,7 @@ def share(
     )
     db.add(shared)
     db.flush()
+    log_activity(db, user.id, "posts", "post_share", f"Shared {source.author.name}'s post", entity_type="post", entity_id=source.id, target_user_id=source.author_id, details={"shared_post_id": shared.id})
 
     create_notification(
         db,

@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine
 from .config import settings
-from .routes import auth, users, friends, posts, chat, upload, notifications, albums, giphy
+from .routes import auth, users, friends, posts, chat, upload, notifications, albums, giphy, activity
 
 Base.metadata.create_all(bind=engine)
 
@@ -72,6 +72,7 @@ app.include_router(upload.router)
 app.include_router(notifications.router)
 app.include_router(albums.router)
 app.include_router(giphy.router)
+app.include_router(activity.router)
 
 
 @app.get("/health")

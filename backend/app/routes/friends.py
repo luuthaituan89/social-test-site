@@ -5,6 +5,7 @@ from ..database import get_db
 from ..models import User, Friendship, FriendshipStatus, Block
 from ..auth import get_current_user
 from ..notifications import create_notification
+from ..activity import log_activity
 
 router = APIRouter(prefix="/api/friends", tags=["Friends"])
 
@@ -62,6 +63,9 @@ def send_request(target_id: int, db: Session = Depends(get_db), user: User = Dep
     friendship = Friendship(requester_id=user.id, addressee_id=target_id)
     db.add(friendship)
     db.flush()
+    target = db.get(User, target_id)
+    log_activity(db, user.id, "friends", "friend_request_sent", f"Sent a friend request to {target.name}", entity_type="friendship", entity_id=friendship.id, target_user_id=target_id)
+    log_activity(db, target_id, "friends", "friend_request_received", f"Received a friend request from {user.name}", entity_type="friendship", entity_id=friendship.id, target_user_id=user.id)
     create_notification(
         db, user_id=target_id, actor_id=user.id, type="friend_request",
         message=f"{user.name} sent you a friend request",
@@ -77,6 +81,9 @@ def accept_request(request_id: int, db: Session = Depends(get_db), user: User = 
     if not row or row.addressee_id != user.id:
         raise HTTPException(404, "Request not found")
     row.status = FriendshipStatus.accepted
+    requester = db.get(User, row.requester_id)
+    log_activity(db, user.id, "friends", "friend_added", f"Became friends with {requester.name}", entity_type="friendship", entity_id=row.id, target_user_id=requester.id)
+    log_activity(db, requester.id, "friends", "friend_added", f"Became friends with {user.name}", entity_type="friendship", entity_id=row.id, target_user_id=user.id)
     create_notification(
         db, user_id=row.requester_id, actor_id=user.id, type="friend_accept",
         message=f"{user.name} accepted your friend request",
@@ -98,6 +105,11 @@ def reject_request(request_id: int, db: Session = Depends(get_db), user: User = 
 
 @router.delete("/{target_id}")
 def unfriend(target_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    target = db.get(User, target_id)
+    existing = db.query(Friendship).filter(pair_filter(user.id, target_id), Friendship.status == FriendshipStatus.accepted).first()
     db.query(Friendship).filter(pair_filter(user.id, target_id)).delete(synchronize_session=False)
+    if existing and target:
+        log_activity(db, user.id, "friends", "friend_removed", f"Unfriended {target.name}", target_user_id=target.id)
+        log_activity(db, target.id, "friends", "friend_removed", f"Friendship with {user.name} ended", target_user_id=user.id)
     db.commit()
     return {"message": "Friendship removed"}

@@ -13,6 +13,7 @@ from ..schemas import UserPublic, ProfileUpdate, PasswordChange, UsernameChange
 from ..auth import get_current_user, verify_password, hash_password
 from ..config import settings
 from ..utils import are_friends, is_blocked_either_way, friend_ids
+from ..activity import log_activity
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -56,12 +57,14 @@ def possessive_pronoun(user: User) -> str:
 @router.post("/me/avatar", response_model=UserPublic)
 def avatar(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     user.avatar_url = save_upload(file)
-    db.add(Post(
+    post = Post(
         author_id=user.id,
         content=f"{user.name} updated {possessive_pronoun(user)} profile picture.",
         image_url=user.avatar_url,
         privacy=Privacy.friends,
-    ))
+    )
+    db.add(post);db.flush()
+    log_activity(db, user.id, "profile", "avatar_updated", "Updated profile picture", entity_type="post", entity_id=post.id, details={"image_url": user.avatar_url})
     db.commit()
     db.refresh(user)
     return user
@@ -70,6 +73,7 @@ def avatar(file: UploadFile = File(...), db: Session = Depends(get_db), user: Us
 @router.delete("/me/avatar", response_model=UserPublic)
 def delete_avatar(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     user.avatar_url = None
+    log_activity(db, user.id, "profile", "avatar_removed", "Removed profile picture")
     db.commit()
     db.refresh(user)
     return user
@@ -78,12 +82,14 @@ def delete_avatar(db: Session = Depends(get_db), user: User = Depends(get_curren
 @router.post("/me/cover", response_model=UserPublic)
 def cover(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     user.cover_url = save_upload(file)
-    db.add(Post(
+    post = Post(
         author_id=user.id,
         content=f"{user.name} updated {possessive_pronoun(user)} cover photo.",
         image_url=user.cover_url,
         privacy=Privacy.friends,
-    ))
+    )
+    db.add(post);db.flush()
+    log_activity(db, user.id, "profile", "cover_updated", "Updated cover photo", entity_type="post", entity_id=post.id, details={"image_url": user.cover_url})
     db.commit()
     db.refresh(user)
     return user
@@ -92,6 +98,7 @@ def cover(file: UploadFile = File(...), db: Session = Depends(get_db), user: Use
 @router.delete("/me/cover", response_model=UserPublic)
 def delete_cover(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     user.cover_url = None
+    log_activity(db, user.id, "profile", "cover_removed", "Removed cover photo")
     db.commit()
     db.refresh(user)
     return user
@@ -152,7 +159,10 @@ def search(q: str, db: Session = Depends(get_db), user: User = Depends(get_curre
     )
     if hidden:
         query = query.filter(~User.id.in_(hidden))
-    return query.limit(30).all()
+    results = query.limit(30).all()
+    log_activity(db, user.id, "search", "user_search", f'Searched for “{q}”', details={"query": q, "result_count": len(results)})
+    db.commit()
+    return results
 
 
 @router.post("/{target_id}/block")

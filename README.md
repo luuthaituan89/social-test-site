@@ -68,9 +68,18 @@ SocialN kết hợp React 19 + Vite ở frontend, FastAPI + SQLAlchemy ở backe
 #### Giao diện và ngôn ngữ
 
 - Responsive desktop/mobile, Light/Dark mode lưu trong trình duyệt.
+- Tùy chọn múi giờ trong Settings, áp dụng thống nhất cho bài viết, thông báo, trạng thái hoạt động và nhật ký.
 - Sáu ngôn ngữ: Tiếng Việt, English, 한국어, 日本語, 中文 và ไทย.
 - Chọn ngôn ngữ ở trang đăng nhập hoặc trong Settings.
 - Error Boundary hiển thị lỗi giao diện thay vì trang trắng.
+
+#### Nhật ký hoạt động
+
+- Trang riêng tư `/activity-log`, chỉ chủ tài khoản truy cập qua JWT.
+- Bộ lọc bài viết/tương tác, thay đổi hồ sơ, quan hệ bạn bè, tìm kiếm và đăng nhập/bảo mật.
+- Ghi reaction, comment, share, bài viết mới, thay/xóa avatar hoặc ảnh bìa.
+- Ghi lời mời đã gửi/nhận, kết bạn mới và hủy kết bạn.
+- Lưu từ khóa tìm kiếm sau debounce; lịch sử đăng nhập có thời gian, IP và thông tin thiết bị/user-agent.
 
 ### Công nghệ
 
@@ -297,9 +306,18 @@ SocialN combines a React 19 + Vite frontend, a FastAPI + SQLAlchemy backend, and
 #### UI and languages
 
 - Responsive desktop/mobile UI and persistent Light/Dark themes.
+- A Settings time-zone selector consistently applies to posts, notifications, presence dates, and activity history.
 - Vietnamese, English, Korean, Japanese, Chinese, and Thai.
 - Language selection on authentication pages and in Settings.
 - Error Boundary prevents a component failure from producing a blank page.
+
+#### Activity log
+
+- Private JWT-protected `/activity-log` page.
+- Filters for posts/interactions, profile changes, friendships, searches, and login/security history.
+- Records reactions, comments, shares, new posts, avatar/cover updates and removals.
+- Records sent/received friend requests, new friendships, and unfriending.
+- Stores debounced search terms and login timestamp, IP, and device/user-agent details.
 
 ### Technology
 
