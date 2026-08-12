@@ -1,4 +1,4 @@
-import React,{Component,useEffect,useRef,useState}from"react";import{createRoot}from"react-dom/client";import{Search,Home,Users,MessageCircle,Bell,Settings,Image as ImageIcon,ThumbsUp,MessageSquare,Share2,Send,LogOut,Camera,UserPlus,UserCheck,ShieldBan,Menu,X,Check,MoreHorizontal,MoreVertical,Edit2,Trash2,Pin,Archive,Paperclip,Mic,Square,FileText,Download,Maximize2,Sun,Moon,Languages,Smile,History}from"lucide-react";import{LANGUAGES,setSiteLanguage}from"./i18n";import"./styles.css";
+import React,{Component,useEffect,useRef,useState}from"react";import{createRoot}from"react-dom/client";import{Search,Home,Users,MessageCircle,Bell,Settings,Image as ImageIcon,ThumbsUp,MessageSquare,Share2,Send,LogOut,Camera,UserPlus,UserCheck,ShieldBan,Menu,X,Check,MoreHorizontal,MoreVertical,Edit2,Trash2,Pin,Archive,Paperclip,Mic,Square,FileText,Download,Maximize2,Sun,Moon,Languages,Smile,History,Reply}from"lucide-react";import{LANGUAGES,setSiteLanguage}from"./i18n";import"./styles.css";
 const API=import.meta.env.VITE_API_URL||"http://localhost:8000",WS=API.replace(/^http/,"ws");const tok=()=>localStorage.getItem("socialn_token"),asset=u=>u?(/^https?:\/\//i.test(u)?u:`${API}${u}`):null;
 const TIMEZONES=[
   ["auto","Automatic (device)"],["UTC","UTC"],["Asia/Ho_Chi_Minh","Vietnam — Hanoi/Ho Chi Minh City (UTC+7)"],
@@ -535,6 +535,8 @@ function Chat({me,target,open,onChanged}){
   const[selectedStickers,setSelectedStickers]=useState([]),[showStickers,setShowStickers]=useState(false);
   const[selectedGif,setSelectedGif]=useState(null),[showGifPicker,setShowGifPicker]=useState(false);
   const[gifQuery,setGifQuery]=useState(""),[gifResults,setGifResults]=useState([]),[gifLoading,setGifLoading]=useState(false),[gifError,setGifError]=useState("");
+  const[replyingTo,setReplyingTo]=useState(null),[messageMenu,setMessageMenu]=useState(null);
+  const[forwarding,setForwarding]=useState(null),[forwardTargets,setForwardTargets]=useState([]),[actionBusy,setActionBusy]=useState(false);
 
   function lastActiveLabel(value){
     if(!value)return "Offline";
@@ -563,6 +565,11 @@ function Chat({me,target,open,onChanged}){
       stickers:messageStickers(x.sticker),
       reaction_counts:x.reaction_counts||{},
       my_reaction:x.my_reaction||null,
+      reply_to_id:x.reply_to_id==null?null:Number(x.reply_to_id),
+      reply_to:x.reply_to||null,
+      is_forwarded:Boolean(x.is_forwarded||x.forwarded_from_id),
+      is_pinned:Boolean(x.is_pinned),
+      is_unsent:Boolean(x.is_unsent),
       created_at:x.created_at||new Date().toISOString()
     };
   }
@@ -599,7 +606,7 @@ function Chat({me,target,open,onChanged}){
   }
 
   useEffect(()=>{
-    setMessages([]);setSelectedStickers([]);setShowStickers(false);setSelectedGif(null);setShowGifPicker(false);setGifQuery("");
+    setMessages([]);setSelectedStickers([]);setShowStickers(false);setSelectedGif(null);setShowGifPicker(false);setGifQuery("");setReplyingTo(null);setMessageMenu(null);setForwarding(null);
     if(target?.id)loadHistory();
   },[target?.id]);
 
@@ -672,6 +679,10 @@ function Chat({me,target,open,onChanged}){
             setMessages(prev=>prev.map(m=>m.id===Number(data.message_id)?{...m,reaction_counts:data.reaction_counts||{},my_reaction:Number(data.reacting_user_id)===Number(me.id)?data.reaction:m.my_reaction}:m));
             return;
           }
+          if(data?.type==="message_updated"){
+            setMessages(prev=>prev.map(m=>m.id===Number(data.message_id)?{...m,...data,content:data.is_unsent?"":m.content,attachment_url:data.is_unsent?null:m.attachment_url,sticker:data.is_unsent?null:m.sticker,reaction_counts:data.is_unsent?{}:m.reaction_counts}:m));
+            return;
+          }
           if(data?.type==="typing"){
             if(Number(data.from_user_id)===Number(target?.id)&&Number(data.to_user_id)===Number(me.id)){
               setIsOtherTyping(Boolean(data.is_typing));clearTimeout(typingHideRef.current);
@@ -734,8 +745,9 @@ function Chat({me,target,open,onChanged}){
     try{
       const result=await api(`/api/chat/${target.id}/messages`,{
         method:"POST",
-        body:JSON.stringify(gifToSend?{content:value,message_type:"gif",attachment_url:gifToSend.url,attachment_name:gifToSend.title||"GIPHY GIF",attachment_mime:"image/gif"}:{content:value,message_type:stickersToSend.length?"sticker":"text",sticker:stickersToSend.length?JSON.stringify(stickersToSend):null})
+        body:JSON.stringify(gifToSend?{content:value,message_type:"gif",attachment_url:gifToSend.url,attachment_name:gifToSend.title||"GIPHY GIF",attachment_mime:"image/gif",reply_to_id:replyingTo?.id||null}:{content:value,message_type:stickersToSend.length?"sticker":"text",sticker:stickersToSend.length?JSON.stringify(stickersToSend):null,reply_to_id:replyingTo?.id||null})
       });
+      setReplyingTo(null);
       mergeMessages(result);
       await loadHistory(true);
       onChanged?.();
@@ -774,8 +786,8 @@ function Chat({me,target,open,onChanged}){
     try{
       const fd=new FormData();fd.append("file",file);
       const uploaded=await api("/api/chat/upload",{method:"POST",body:fd});
-      const result=await api(`/api/chat/${target.id}/messages`,{method:"POST",body:JSON.stringify({content:"",message_type:forcedType||uploaded.message_type,attachment_url:uploaded.url,attachment_name:uploaded.name,attachment_mime:uploaded.mime})});
-      mergeMessages(result);onChanged?.();
+      const result=await api(`/api/chat/${target.id}/messages`,{method:"POST",body:JSON.stringify({content:"",message_type:forcedType||uploaded.message_type,attachment_url:uploaded.url,attachment_name:uploaded.name,attachment_mime:uploaded.mime,reply_to_id:replyingTo?.id||null})});
+      mergeMessages(result);setReplyingTo(null);onChanged?.();
     }catch(e){alert(`Could not send attachment: ${e.message}`)}finally{setSending(false)}
   }
 
@@ -784,6 +796,37 @@ function Chat({me,target,open,onChanged}){
       const d=await api(`/api/chat/messages/${messageId}/reaction`,{method:"POST",body:JSON.stringify({reaction})});
       setMessages(prev=>prev.map(m=>m.id===messageId?{...m,reaction_counts:d.reaction_counts||{},my_reaction:d.my_reaction}:m));
     }catch(e){alert(e.message)}
+  }
+
+  function messageSummary(message){
+    if(!message)return "Message";
+    if(message.is_unsent)return "Message was unsent";
+    if(message.content)return message.content;
+    return {image:"Photo",video:"Video",voice:"Voice message",file:message.attachment_name||"File",sticker:"Sticker",gif:"GIF"}[message.message_type]||"Message";
+  }
+
+  async function toggleMessagePin(message){
+    setActionBusy(true);
+    try{const d=await api(`/api/chat/messages/${message.id}/pin`,{method:"POST"});setMessages(prev=>prev.map(m=>m.id===message.id?{...m,is_pinned:d.is_pinned}:m));setMessageMenu(null)}
+    catch(e){alert(e.message)}finally{setActionBusy(false)}
+  }
+
+  async function unsendMessage(message){
+    if(!await confirmDialog({variant:"danger",title:"Unsend message?",message:"This message will be removed for everyone in the conversation.",confirmLabel:"Unsend",cancelLabel:"Cancel"}))return;
+    setActionBusy(true);
+    try{await api(`/api/chat/messages/${message.id}`,{method:"DELETE"});setMessages(prev=>prev.map(m=>m.id===message.id?{...m,is_unsent:true,is_pinned:false,content:"",attachment_url:null,sticker:null,reaction_counts:{}}:m));setMessageMenu(null)}
+    catch(e){alert(e.message)}finally{setActionBusy(false)}
+  }
+
+  async function openForward(message){
+    setMessageMenu(null);setForwarding(message);
+    try{const rows=await api("/api/chat/conversations");setForwardTargets((Array.isArray(rows)?rows:[]).filter(item=>item?.user?.id))}catch(e){alert(e.message);setForwarding(null)}
+  }
+
+  async function forwardTo(user){
+    setActionBusy(true);
+    try{await api(`/api/chat/messages/${forwarding.id}/forward/${user.id}`,{method:"POST"});setForwarding(null);onChanged?.()}
+    catch(e){alert(e.message)}finally{setActionBusy(false)}
   }
 
   async function toggleRecording(){
@@ -810,19 +853,24 @@ function Chat({me,target,open,onChanged}){
 
     <div className="messages">
       {messages.map(x=><div key={x.id} className={`bubble ${x.sender_id===Number(me.id)?"mine":""} attachment-bubble`}>
+        {x.is_pinned&&<div className="message-pinned"><Pin size={12}/> Pinned</div>}
+        {x.is_forwarded&&<div className="message-forwarded"><Share2 size={12}/> Forwarded</div>}
+        {x.reply_to&&<button className="message-reply-preview" onClick={()=>document.getElementById(`message-${x.reply_to.id}`)?.scrollIntoView({behavior:"smooth",block:"center"})}><b>{Number(x.reply_to.sender_id)===Number(me.id)?"You":target.name}</b><span>{messageSummary(x.reply_to)}</span></button>}
+        <span id={`message-${x.id}`} className="message-anchor"/>
         {x.message_type==="image"&&x.attachment_url&&<button className="chat-media-button" onClick={()=>setPreviewMedia({type:"image",url:asset(x.attachment_url),name:x.attachment_name})}><img className="chat-image" src={asset(x.attachment_url)} alt={x.attachment_name||"Image"} onLoad={()=>scrollChatToEnd("auto")}/><span className="media-hover-icon"><Maximize2 size={20}/></span></button>}
         {x.message_type==="video"&&x.attachment_url&&<div className="chat-video-wrap"><video className="chat-video" src={asset(x.attachment_url)} controls preload="metadata" playsInline/><button className="media-expand" onClick={()=>setPreviewMedia({type:"video",url:asset(x.attachment_url),name:x.attachment_name})}><Maximize2 size={16}/> Preview</button></div>}
         {x.message_type==="voice"&&x.attachment_url&&<audio className="chat-audio" controls src={asset(x.attachment_url)}/>}
         {x.message_type==="file"&&x.attachment_url&&<a className="chat-file" href={asset(x.attachment_url)} download={x.attachment_name}><FileText size={22}/><span>{x.attachment_name||"Download file"}</span><Download size={17}/></a>}
         {x.message_type==="gif"&&x.attachment_url&&<button className="chat-media-button chat-gif-button" onClick={()=>setPreviewMedia({type:"image",url:asset(x.attachment_url),name:x.attachment_name})}><img className="chat-gif" src={asset(x.attachment_url)} alt={x.attachment_name||"GIF"} onLoad={()=>scrollChatToEnd("auto")}/><span className="gif-label">GIF</span></button>}
-        {x.message_type==="sticker"?<div className={`message-with-sticker ${x.content&&x.sticker?"mixed":"sticker-only"}`}>{x.content&&x.sticker&&<span className="message-text">{x.content}</span>}<span className="message-stickers" role="img" aria-label="Stickers">{(x.stickers.length?x.stickers:messageStickers(x.sticker||x.content)).map((item,index)=><span className="message-sticker" key={`${item}-${index}`}>{item}</span>)}</span></div>:x.content&&<div className={x.message_type==="gif"?"gif-caption":undefined}>{x.content}</div>}
-        <div className="message-reaction-control"><button className="message-react-trigger" title="React">{x.my_reaction?reactionInfo(x.my_reaction).emoji:"☺"}</button><div className="message-reaction-picker">{REACTIONS.map(r=><button key={r.key} title={r.label} onClick={()=>reactMessage(x.id,r.key)}>{r.emoji}</button>)}</div></div>
+        {x.is_unsent?<div className="message-unsent">This message was unsent</div>:x.message_type==="sticker"?<div className={`message-with-sticker ${x.content&&x.sticker?"mixed":"sticker-only"}`}>{x.content&&x.sticker&&<span className="message-text">{x.content}</span>}<span className="message-stickers" role="img" aria-label="Stickers">{(x.stickers.length?x.stickers:messageStickers(x.sticker||x.content)).map((item,index)=><span className="message-sticker" key={`${item}-${index}`}>{item}</span>)}</span></div>:x.content&&<div className={x.message_type==="gif"?"gif-caption":undefined}>{x.content}</div>}
+        {!x.is_unsent&&<div className="message-actions"><div className="message-reaction-control"><button className="message-react-trigger" title="React">{x.my_reaction?reactionInfo(x.my_reaction).emoji:"☺"}</button><div className="message-reaction-picker">{REACTIONS.map(r=><button key={r.key} title={r.label} onClick={()=>reactMessage(x.id,r.key)}>{r.emoji}</button>)}</div></div><button className="message-action-button" title="Reply" onClick={()=>{setReplyingTo(x);setMessageMenu(null);composeInputRef.current?.focus()}}><Reply size={15}/></button><div className="message-more-wrap"><button className="message-action-button" title="More" onClick={()=>setMessageMenu(messageMenu===x.id?null:x.id)}><MoreVertical size={16}/></button>{messageMenu===x.id&&<div className="message-action-menu">{x.sender_id===Number(me.id)&&<button disabled={actionBusy} onClick={()=>unsendMessage(x)}><Trash2 size={15}/> Unsend</button>}<button disabled={actionBusy} onClick={()=>openForward(x)}><Share2 size={15}/> Forward</button><button disabled={actionBusy} onClick={()=>toggleMessagePin(x)}><Pin size={15}/> {x.is_pinned?"Unpin":"Pin"}</button></div>}</div></div>}
         {Object.keys(x.reaction_counts||{}).length>0&&<div className="message-reaction-summary">{Object.entries(x.reaction_counts).filter(([,n])=>n>0).map(([key,n])=><span key={key}>{reactionInfo(key).emoji}{n>1?n:""}</span>)}</div>}
       </div>)}
       {isOtherTyping&&<div className="typing-indicator"><span/><span/><span/><b>{target.name} is typing...</b></div>}
       <div ref={endRef}/>
     </div>
 
+    {replyingTo&&<div className="chat-replying"><Reply size={17}/><div><b>Replying to {replyingTo.sender_id===Number(me.id)?"yourself":target.name}</b><span>{messageSummary(replyingTo)}</span></div><button title="Cancel reply" onClick={()=>setReplyingTo(null)}><X size={18}/></button></div>}
     <div className="chat-input">
       <label className="chat-tool" title="Send image or video"><ImageIcon size={19}/><input hidden type="file" accept="image/*,video/*" onChange={e=>{const f=e.target.files?.[0];uploadAttachment(f,f?.type.startsWith("video/")?"video":"image");e.target.value=""}}/></label>
       <label className="chat-tool" title="Send file"><Paperclip size={19}/><input hidden type="file" onChange={e=>{uploadAttachment(e.target.files?.[0],"file");e.target.value=""}}/></label>
@@ -852,7 +900,8 @@ function Chat({me,target,open,onChanged}){
         <Send size={18}/>
       </button>
     </div>
-    {previewMedia&&<MediaPreview media={previewMedia} onClose={()=>setPreviewMedia(null)}/>}
+    {forwarding&&<div className="forward-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setForwarding(null)}}><div className="forward-dialog card"><div className="forward-head"><div><b>Forward message</b><small>{messageSummary(forwarding)}</small></div><button onClick={()=>setForwarding(null)}><X size={19}/></button></div><div className="forward-list">{forwardTargets.length===0?<div className="empty compact">No conversations available.</div>:forwardTargets.map(item=><button disabled={actionBusy} key={item.user.id} onClick={()=>forwardTo(item.user)}><Avatar user={item.user} size={40}/><span><b>{item.user.name}</b><small>@{item.user.username}</small></span><Send size={17}/></button>)}</div></div></div>}
+    {previewMedia&&<MediaPreview media={previewMedia} onClose={()=>setPreviewMedia(null)}/>} 
   </div>
 }
 
@@ -969,7 +1018,7 @@ const RESERVED_PATHS=new Set(["settings","friends","messages","notifications","a
 const currentPath=()=>decodeURIComponent(window.location.pathname.replace(/^\/+|\/+$/g,""));
 
 function RoutedApp(){
-  const[user,setUser]=useState(null),[view,setView]=useState("home"),[feed,setFeed]=useState([]),[profile,setProfile]=useState(null),[friends,setFriends]=useState([]),[requests,setRequests]=useState([]),[suggestions,setSuggestions]=useState([]),[target,setTarget]=useState(null),[conversations,setConversations]=useState([]),[notifs,setNotifs]=useState([]),[unread,setUnread]=useState(0),[messageUnread,setMessageUnread]=useState(0),[drop,setDrop]=useState(false),[search,setSearch]=useState(""),[results,setResults]=useState([]),[routeError,setRouteError]=useState("");
+  const[user,setUser]=useState(null),[view,setView]=useState("home"),[feed,setFeed]=useState([]),[profile,setProfile]=useState(null),[friends,setFriends]=useState([]),[requests,setRequests]=useState([]),[suggestions,setSuggestions]=useState([]),[target,setTarget]=useState(null),[conversations,setConversations]=useState([]),[notifs,setNotifs]=useState([]),[unread,setUnread]=useState(0),[messageUnread,setMessageUnread]=useState(0),[drop,setDrop]=useState(false),[accountDrop,setAccountDrop]=useState(false),[search,setSearch]=useState(""),[results,setResults]=useState([]),[routeError,setRouteError]=useState("");
   const[theme,setTheme]=useState(()=>localStorage.getItem("socialn_theme")||"dark");
   const[language,setLanguage]=useState(()=>localStorage.getItem("socialn_language")||"vi");
   const[timezone,setTimezone]=useState(()=>localStorage.getItem("socialn_timezone")||"auto");
@@ -985,7 +1034,7 @@ function RoutedApp(){
   function setRoute(path,nextView,{replace=false}={}){
     const normalized=path.startsWith("/")?path:`/${path}`;
     if(window.location.pathname!==normalized)window.history[replace?"replaceState":"pushState"]({},"",normalized);
-    setView(nextView);setDrop(false);setRouteError("");
+    setView(nextView);setDrop(false);setAccountDrop(false);setRouteError("");
     setMobileSidebarOpen(false);
   }
 
@@ -1032,7 +1081,7 @@ function RoutedApp(){
   if(!user)return <Login language={language} onLanguageChange={setLanguage} onLogin={u=>{setUser(u);window.history.replaceState({},"","/")}}/>;
   return <div><ConfirmHost/>
     <header className="topbar"><button className="sidebar-toggle" onClick={toggleSidebar} aria-label={mobileSidebarOpen||!sidebarCollapsed?"Close navigation menu":"Open navigation menu"} aria-expanded={mobileSidebarOpen||!sidebarCollapsed}><Menu size={23}/></button><div className="brand" onClick={()=>go("/","home")}>Social<span>N</span></div><div className="search"><Search/><input value={search} onChange={e=>query(e.target.value)} placeholder="Search SocialN..."/>{results.length>0&&<div className="search-results">{results.map(u=><button key={u.id} onClick={()=>{openProfile(u.id);setResults([]);setSearch("")}}><Avatar user={u}/><span>{u.name}<small>@{u.username}</small></span></button>)}</div>}</div>
-      <div className="top-actions"><button className="top-home" onClick={()=>go("/","home")}><Home/></button><button className="top-friends" onClick={()=>go("/friends","friends")}><Users/></button><button className="message-icon-btn top-messages" onClick={()=>go("/messages","chat")}><MessageCircle/>{messageUnread>0&&<span className="badge">{messageUnread>99?"99+":messageUnread}</span>}</button><div className="notif-wrap top-notifications"><button className="notification-btn" onClick={()=>setDrop(!drop)}><Bell/>{unread>0&&<span className="badge">{unread}</span>}</button>{drop&&<div className="notif-dropdown"><div className="notif-dropdown-head"><b>Notifications</b><button onClick={async()=>{await api("/api/notifications/read-all",{method:"POST"});loadN()}}>Mark all read</button></div><div className="notif-scroll">{notifs.slice(0,20).map(n=><button className={`notification-row ${n.is_read?"":"unread"}`} key={n.id} onClick={()=>read(n)}><Avatar user={n.actor}/><div className="notification-content">{n.message}<small>{formatDateTime(n.created_at)}</small></div></button>)}</div></div>}</div><button className="top-settings" onClick={()=>go("/settings","settings")}><Settings/></button><button className="top-logout" onClick={logout}><LogOut/></button></div>
+      <div className="top-actions"><button className="message-icon-btn top-messages" title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/>{messageUnread>0&&<span className="badge">{messageUnread>99?"99+":messageUnread}</span>}</button><div className="notif-wrap top-notifications"><button className="notification-btn" title="Notifications" onClick={()=>{setDrop(value=>!value);setAccountDrop(false)}}><Bell/>{unread>0&&<span className="badge">{unread}</span>}</button>{drop&&<div className="notif-dropdown"><div className="notif-dropdown-head"><b>Notifications</b><button onClick={async()=>{await api("/api/notifications/read-all",{method:"POST"});loadN()}}>Mark all read</button></div><div className="notif-scroll">{notifs.slice(0,20).map(n=><button className={`notification-row ${n.is_read?"":"unread"}`} key={n.id} onClick={()=>read(n)}><Avatar user={n.actor}/><div className="notification-content">{n.message}<small>{formatDateTime(n.created_at)}</small></div></button>)}</div></div>}</div><div className="account-wrap"><button className="account-trigger" title="Account" aria-expanded={accountDrop} onClick={()=>{setAccountDrop(value=>!value);setDrop(false)}}><Avatar user={user} size={40}/><span className="account-caret">⌄</span></button>{accountDrop&&<div className="account-dropdown"><button className="account-profile" onClick={()=>openProfile(user.id)}><Avatar user={user} size={46}/><span><b>{user.name}</b><small>View your profile</small></span></button><div className="account-divider"/><button onClick={()=>go("/settings","settings")}><Settings size={20}/><span>Settings</span></button><button onClick={logout}><LogOut size={20}/><span>Log out</span></button></div>}</div></div>
     </header>
     <div className={`layout ${sidebarCollapsed?"sidebar-collapsed":""}`}>{mobileSidebarOpen&&<button className="sidebar-backdrop" aria-label="Close navigation menu" onClick={()=>setMobileSidebarOpen(false)}/>}<aside className={`sidebar ${mobileSidebarOpen?"open":""}`}><button className="side-user" title={user.name} onClick={()=>openProfile(user.id)}><Avatar user={user}/><b className="sidebar-label">{user.name}</b></button><button title="Home" onClick={()=>go("/","home")}><Home/><span className="sidebar-label">Home</span></button><button title="Profile" onClick={()=>openProfile(user.id)}><Users/><span className="sidebar-label">Profile</span></button><button title="Friends" onClick={()=>go("/friends","friends")}><UserCheck/><span className="sidebar-label">Friends</span>{requests.length>0&&<span className="side-badge">{requests.length}</span>}</button><button title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/><span className="sidebar-label">Messages</span></button><button title="Activity log" onClick={()=>go("/activity-log","activity")}><History/><span className="sidebar-label">Activity log</span></button><button title="Settings" onClick={()=>go("/settings","settings")}><Settings/><span className="sidebar-label">Settings</span></button></aside>
       <main className={`main ${view==="chat"?"chat-main":view==="profile"?"profile-main":["home","friends","settings","activity","notifications"].includes(view)?"adaptive-main":""}`}>

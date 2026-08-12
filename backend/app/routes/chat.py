@@ -73,7 +73,23 @@ def get_or_create_conversation(db: Session, a: int, b: int) -> Conversation:
     return conv
 
 
-def serialize_message(msg: Message, other_user_id: int) -> dict:
+def message_preview(db: Session, message_id: int | None) -> dict | None:
+    if not message_id:
+        return None
+    original = db.get(Message, message_id)
+    if not original:
+        return None
+    return {
+        "id": original.id,
+        "sender_id": original.sender_id,
+        "content": "" if original.is_unsent else original.content,
+        "message_type": original.message_type,
+        "attachment_name": original.attachment_name,
+        "is_unsent": original.is_unsent,
+    }
+
+
+def serialize_message(msg: Message, other_user_id: int, db: Session | None = None) -> dict:
     return {
         "type": "message",
         "id": msg.id,
@@ -87,6 +103,12 @@ def serialize_message(msg: Message, other_user_id: int) -> dict:
         "attachment_name": msg.attachment_name,
         "attachment_mime": msg.attachment_mime,
         "sticker": msg.sticker,
+        "reply_to_id": msg.reply_to_id,
+        "reply_to": message_preview(db, msg.reply_to_id) if db else None,
+        "forwarded_from_id": msg.forwarded_from_id,
+        "is_forwarded": bool(msg.forwarded_from_id),
+        "is_pinned": msg.is_pinned,
+        "is_unsent": msg.is_unsent,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
     }
 
@@ -356,6 +378,12 @@ def messages(
         "attachment_name": m.attachment_name,
         "attachment_mime": m.attachment_mime,
         "sticker": m.sticker,
+        "reply_to_id": m.reply_to_id,
+        "reply_to": message_preview(db, m.reply_to_id),
+        "forwarded_from_id": m.forwarded_from_id,
+        "is_forwarded": bool(m.forwarded_from_id),
+        "is_pinned": m.is_pinned,
+        "is_unsent": m.is_unsent,
         "reaction_counts": reaction_counts,
         "my_reaction": my_reaction,
         "created_at": m.created_at.isoformat() if m.created_at else None,
@@ -398,6 +426,9 @@ async def send_message(
     if other_user_id != user.id:
         set_conversation_state(conv, other_user_id, "archived", False)
 
+    reply_to = db.get(Message, data.reply_to_id) if data.reply_to_id else None
+    if reply_to and reply_to.conversation_id != conv.id:
+        raise HTTPException(400, "Reply target is not in this conversation")
     msg = Message(
         conversation_id=conv.id,
         sender_id=user.id,
@@ -407,6 +438,7 @@ async def send_message(
         attachment_name=data.attachment_name,
         attachment_mime=data.attachment_mime,
         sticker=data.sticker,
+        reply_to_id=reply_to.id if reply_to else None,
         is_read=False,
     )
     db.add(msg)
@@ -425,23 +457,7 @@ async def send_message(
     db.commit()
     db.refresh(msg)
 
-    payload = {
-        "type": "message",
-        "id": msg.id,
-        "conversation_id": conv.id,
-        "sender_id": user.id,
-        "from_user_id": user.id,
-        "to_user_id": other_user_id,
-        "content": msg.content,
-        "message_type": msg.message_type,
-        "attachment_url": msg.attachment_url,
-        "attachment_name": msg.attachment_name,
-        "attachment_mime": msg.attachment_mime,
-        "sticker": msg.sticker,
-        "reaction_counts": {},
-        "my_reaction": None,
-        "created_at": msg.created_at.isoformat(),
-    }
+    payload = {**serialize_message(msg, other_user_id, db), "reaction_counts": {}, "my_reaction": None}
 
     await manager.send_user(user.id, payload)
     await manager.send_user(other_user_id, payload)
@@ -456,6 +472,78 @@ async def send_message(
         # a successful message request fail.
         pass
 
+    return payload
+
+
+def owned_chat_message(db: Session, message_id: int, user_id: int):
+    msg = db.get(Message, message_id)
+    conv = db.get(Conversation, msg.conversation_id) if msg else None
+    if not msg or not conv or user_id not in (conv.user_a_id, conv.user_b_id):
+        raise HTTPException(404, "Message not found")
+    return msg, conv
+
+
+@router.post("/messages/{message_id}/pin")
+async def toggle_message_pin(message_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    msg, conv = owned_chat_message(db, message_id, user.id)
+    if msg.is_unsent:
+        raise HTTPException(400, "An unsent message cannot be pinned")
+    msg.is_pinned = not msg.is_pinned
+    db.commit()
+    payload = {"type": "message_updated", "message_id": msg.id, "is_pinned": msg.is_pinned}
+    await manager.send_user(conv.user_a_id, payload)
+    if conv.user_b_id != conv.user_a_id:
+        await manager.send_user(conv.user_b_id, payload)
+    return payload
+
+
+@router.delete("/messages/{message_id}")
+async def unsend_message(message_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    msg, conv = owned_chat_message(db, message_id, user.id)
+    if msg.sender_id != user.id:
+        raise HTTPException(403, "You can only unsend your own messages")
+    msg.content = ""
+    msg.attachment_url = None
+    msg.attachment_name = None
+    msg.attachment_mime = None
+    msg.sticker = None
+    msg.is_unsent = True
+    msg.is_pinned = False
+    db.query(MessageReaction).filter(MessageReaction.message_id == msg.id).delete(synchronize_session=False)
+    db.commit()
+    payload = {"type": "message_updated", "message_id": msg.id, "is_unsent": True, "is_pinned": False}
+    await manager.send_user(conv.user_a_id, payload)
+    if conv.user_b_id != conv.user_a_id:
+        await manager.send_user(conv.user_b_id, payload)
+    return payload
+
+
+@router.post("/messages/{message_id}/forward/{recipient_id}")
+async def forward_message(message_id: int, recipient_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    source, _ = owned_chat_message(db, message_id, user.id)
+    recipient = db.get(User, recipient_id)
+    if not recipient:
+        raise HTTPException(404, "Recipient not found")
+    if source.is_unsent:
+        raise HTTPException(400, "An unsent message cannot be forwarded")
+    if blocked_between(db, user.id, recipient_id):
+        raise HTTPException(403, "You cannot message this user")
+    conv = get_or_create_conversation(db, user.id, recipient_id)
+    forwarded = Message(
+        conversation_id=conv.id, sender_id=user.id, content=source.content,
+        message_type=source.message_type, attachment_url=source.attachment_url,
+        attachment_name=source.attachment_name, attachment_mime=source.attachment_mime,
+        sticker=source.sticker, forwarded_from_id=source.id, is_read=False,
+    )
+    db.add(forwarded);db.flush()
+    create_notification(db, user_id=recipient_id, actor_id=user.id, type="new_message",
+                        message=f"{user.name} forwarded you a message", entity_type="conversation", entity_id=conv.id)
+    db.commit();db.refresh(forwarded)
+    payload = {**serialize_message(forwarded, recipient_id, db), "reaction_counts": {}, "my_reaction": None}
+    await manager.send_user(user.id, payload)
+    if recipient_id != user.id:
+        await manager.send_user(recipient_id, payload)
+        await notification_ws.send(recipient_id, {"type": "notification_refresh", "reason": "new_message"})
     return payload
 
 

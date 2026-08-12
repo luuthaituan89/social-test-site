@@ -143,6 +143,10 @@ class Message(Base):
     attachment_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachment_mime: Mapped[str | None] = mapped_column(String(120), nullable=True)
     sticker: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reply_to_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    forwarded_from_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_unsent: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
 
