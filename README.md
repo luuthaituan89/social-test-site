@@ -68,6 +68,8 @@ SocialN kết hợp React 19 + Vite ở frontend, FastAPI + SQLAlchemy ở backe
 #### Giao diện và ngôn ngữ
 
 - Responsive desktop/mobile, Light/Dark mode lưu trong trình duyệt.
+- Menu hamburger: thu gọn sidebar thành thanh icon trên desktop và mở drawer có backdrop trên mobile.
+- Home, Profile, Friends, Messages, Activity Log và Settings tự mở rộng theo không gian còn lại khi sidebar được thu gọn.
 - Tùy chọn múi giờ trong Settings, áp dụng thống nhất cho bài viết, thông báo, trạng thái hoạt động và nhật ký.
 - Sáu ngôn ngữ: Tiếng Việt, English, 한국어, 日本語, 中文 và ไทย.
 - Chọn ngôn ngữ ở trang đăng nhập hoặc trong Settings.
@@ -306,6 +308,8 @@ SocialN combines a React 19 + Vite frontend, a FastAPI + SQLAlchemy backend, and
 #### UI and languages
 
 - Responsive desktop/mobile UI and persistent Light/Dark themes.
+- Hamburger navigation collapses the desktop sidebar to icons and opens a backdrop drawer on mobile.
+- Home, Profile, Friends, Messages, Activity Log, and Settings automatically expand into space released by the collapsed sidebar.
 - A Settings time-zone selector consistently applies to posts, notifications, presence dates, and activity history.
 - Vietnamese, English, Korean, Japanese, Chinese, and Thai.
 - Language selection on authentication pages and in Settings.
