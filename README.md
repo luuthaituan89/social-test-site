@@ -1,157 +1,134 @@
 # SocialN
 
-> Mạng xã hội full-stack lấy cảm hứng từ những trải nghiệm cốt lõi của Facebook.  
-> A full-stack social network inspired by Facebook's core user experience.
+> Mạng xã hội full-stack lấy cảm hứng từ các trải nghiệm quen thuộc của Facebook/Messenger.
+> A full-stack social network inspired by familiar Facebook and Messenger experiences.
 
 [Tiếng Việt](#tiếng-việt) · [English](#english)
+
+SocialN là dự án học tập/phát triển độc lập, không phải sản phẩm chính thức của Facebook/Meta và không sử dụng mã nguồn độc quyền của họ.
 
 ---
 
 ## Tiếng Việt
 
-### Giới thiệu
+### Tổng quan
 
-SocialN là dự án mạng xã hội full-stack gồm React frontend, FastAPI backend và MySQL. Dự án hỗ trợ hồ sơ cá nhân, bài viết, kết bạn, thông báo, nhắn tin thời gian thực, album ảnh/video và nhiều quy tắc riêng tư.
+SocialN kết hợp React 19 + Vite ở frontend, FastAPI + SQLAlchemy ở backend và MySQL 8.4. Ứng dụng có hồ sơ cá nhân, bảng tin, kết bạn, thông báo, album ảnh/video, chat thời gian thực và tích hợp GIPHY cho GIF.
 
-Đây là một dự án học tập/phát triển độc lập, không phải sản phẩm chính thức và không sử dụng mã nguồn độc quyền của Facebook.
-
-### Tính năng
+### Chức năng hiện có
 
 #### Tài khoản và hồ sơ
 
-- Đăng ký, đăng nhập, đăng xuất bằng JWT.
-- Chỉnh sửa tên, ngày sinh, quê quán, giới tính, tình trạng quan hệ và tiểu sử.
-- URL hồ sơ theo username, ví dụ `http://localhost:5173/username`.
-- Đổi username với thời gian chờ 30 ngày giữa hai lần thay đổi.
-- Đổi mật khẩu.
-- Tìm kiếm, chặn và bỏ chặn người dùng.
-- Thay, căn chỉnh và xóa avatar/ảnh bìa.
-- Việc thay avatar hoặc ảnh bìa tạo bài viết trên dòng thời gian và dùng đại từ `his`, `her` hoặc `their` theo giới tính.
+- Đăng ký, đăng nhập và đăng xuất bằng JWT.
+- Hồ sơ theo username, ví dụ `http://localhost:5173/thaituan`.
+- Chỉnh sửa tên, tiểu sử, ngày sinh, quê quán, giới tính và tình trạng quan hệ.
+- Đổi username; mỗi lần đổi cách nhau ít nhất 30 ngày.
+- Đổi mật khẩu, tìm kiếm, chặn và bỏ chặn người dùng.
+- Cắt/chọn vùng avatar, kéo vị trí ảnh bìa, thay hoặc xóa ảnh.
+- Thay avatar/ảnh bìa tạo bài viết timeline với đại từ `his`, `her` hoặc `their` theo giới tính.
 
-#### Bài viết và tương tác
+#### Bài viết
 
 - Tạo, sửa, xóa và chia sẻ bài viết.
-- Bài viết văn bản/hình ảnh; video được đưa lên dòng thời gian thông qua album.
+- Nội dung chữ, ảnh, GIF GIPHY và Sticker/emoji chèn trực tiếp như ký tự tại con trỏ.
+- Tìm GIF thịnh hành hoặc theo từ khóa; có preview và nút bỏ lựa chọn.
 - Quyền riêng tư: `public`, `friends`, `only_me`.
-- Bình luận bài viết.
-- Reaction: Like, Love, Haha, Wow, Sad và Angry.
-- Thông báo được cập nhật theo reaction, bình luận, lượt chia sẻ và các hoạt động liên quan.
-- Modal xác nhận tùy chỉnh thay cho hộp thoại mặc định của trình duyệt.
+- Bình luận và reaction: Like, Love, Haha, Wow, Sad, Angry.
+- Thông báo cho các hoạt động tương tác liên quan.
+- Hộp thoại xác nhận tùy chỉnh thay cho `alert/confirm` mặc định ở các luồng đã hỗ trợ.
 
 #### Bạn bè
 
-- Gửi, chấp nhận hoặc từ chối lời mời kết bạn.
-- Hủy kết bạn.
-- Xem bạn chung.
-- Gợi ý “People You May Know”.
-- Quy tắc chặn và quyền riêng tư được kiểm tra tại backend.
+- Gửi, chấp nhận, từ chối lời mời; hủy kết bạn.
+- Danh sách bạn, bạn chung và People You May Know.
+- Backend kiểm tra quan hệ chặn và quyền riêng tư.
 
-#### Tin nhắn thời gian thực
+#### Messages
 
-- Gửi và nhận tin nhắn trực tiếp qua REST + WebSocket.
-- REST polling dự phòng nếu WebSocket bị gián đoạn.
-- Gửi ảnh, video, file và voice message.
-- Preview ảnh/video trong ứng dụng và tải file xuống.
-- Reaction cho từng tin nhắn.
-- Trạng thái Online/Offline, thời gian hoạt động gần nhất và “is typing…”.
-- Badge số tin nhắn chưa đọc.
-- Ghim, lưu trữ và xóa cuộc trò chuyện khỏi inbox.
-- Cho phép tự nhắn tin trong “Personal storage”, luôn được ưu tiên đầu danh sách.
+- Chat trực tiếp qua REST + WebSocket; polling là phương án dự phòng.
+- Tự nhắn tin trong Personal storage, luôn ở đầu danh sách.
+- Ghim, lưu trữ và xóa hội thoại khỏi inbox.
+- Gửi chữ, Sticker/emoji như ký tự, GIF GIPHY, ảnh, video, file và voice message.
+- Giới hạn một file chat ở tầng ứng dụng: **2048 MB (2 GB)**.
+- Preview ảnh/video/GIF, tải file, reaction từng tin nhắn.
+- Tự cuộn sau khi media tải xong.
+- Online/Offline, thời gian hoạt động gần nhất và `is typing...`.
+- Badge tin nhắn chưa đọc và badge thông báo.
 
 #### Album ảnh/video
 
-- Album hệ thống: Profile pictures, Cover photos và Timeline photos.
-- Tạo album tùy chỉnh với tên, mô tả/ghi chú và quyền riêng tư.
-- Sửa thông tin hoặc xóa toàn bộ album tùy chỉnh.
-- Upload nhiều ảnh/video; tầng ứng dụng không đặt giới hạn số lượng hoặc dung lượng.
-- Chọn và xóa media trong album.
-- Thêm media vào album sẽ tạo bài viết tương ứng trên timeline.
-- Xóa media/album sẽ đồng bộ xóa bài viết và tham chiếu trong Timeline photos.
-- Trình preview hỗ trợ cuộn ngang/dọc với media lớn hơn màn hình.
+- Album hệ thống: Profile pictures, Cover photos, Timeline photos.
+- Tạo album tùy chỉnh với tên, mô tả và quyền riêng tư.
+- Sửa/xóa album, upload nhiều ảnh/video, chọn và xóa media.
+- Thêm media tạo bài viết timeline; xóa media/album đồng bộ bài viết và Timeline photos liên quan.
+- Album hệ thống chỉ nhận media từ đúng luồng avatar, ảnh bìa hoặc timeline.
+- Viewer hỗ trợ cuộn khi media lớn hơn màn hình.
+- Code không đặt quota tổng cho album; giới hạn thực tế vẫn phụ thuộc ổ đĩa, reverse proxy, timeout và tài nguyên máy chủ.
 
-#### Giao diện
+#### Giao diện và ngôn ngữ
 
-- Responsive cho desktop và màn hình nhỏ.
-- Light mode và Dark mode trong Settings.
-- Theme được lưu trên trình duyệt và giữ nguyên sau khi tải lại trang.
-- Error Boundary ngăn lỗi một component làm trắng toàn bộ giao diện.
+- Responsive desktop/mobile, Light/Dark mode lưu trong trình duyệt.
+- Sáu ngôn ngữ: Tiếng Việt, English, 한국어, 日本語, 中文 và ไทย.
+- Chọn ngôn ngữ ở trang đăng nhập hoặc trong Settings.
+- Error Boundary hiển thị lỗi giao diện thay vì trang trắng.
 
 ### Công nghệ
 
 | Thành phần | Công nghệ |
 |---|---|
-| Frontend | React 19, Vite 7, Lucide React |
-| Backend | Python 3.12, FastAPI, Uvicorn |
-| ORM | SQLAlchemy 2 |
-| Database | MySQL 8.4 |
-| Xác thực | JWT, bcrypt |
-| Realtime | WebSocket |
-| Upload | Multipart + Docker named volume |
-| Triển khai local | Docker, Docker Compose |
-| Kiểm thử API thủ công | Swagger UI, Postman collection |
+| Frontend | React 19.1, Vite 7.1, Lucide React |
+| Backend | Python 3.12, FastAPI 0.116, Uvicorn |
+| ORM / DB | SQLAlchemy 2.0, PyMySQL, MySQL 8.4 |
+| Auth | JWT (`python-jose`), bcrypt/passlib |
+| Realtime | WebSocket + REST polling fallback |
+| Media | Multipart upload, Docker volume |
+| GIF | GIPHY Search/Trending qua backend proxy |
+| Local stack | Docker Compose |
 
 ### Kiến trúc
 
 ```text
 Browser
-  └── React + Vite (:5173)
-        ├── REST/JSON + multipart
-        └── WebSocket
-               │
-               ▼
-        FastAPI + Uvicorn (:8000)
-               │
-               ├── SQLAlchemy ──► MySQL 8.4 (:3306)
-               └── /uploads ────► Docker volume uploads_data
+  └─ React + Vite (:5173)
+      ├─ REST/JSON + multipart ──────┐
+      └─ WebSocket ──────────────────┤
+                                     ▼
+                         FastAPI + Uvicorn (:8000)
+                            ├─ SQLAlchemy ── MySQL (:3306)
+                            ├─ /uploads ──── uploads_data
+                            └─ GIPHY proxy ─ GIPHY API
 ```
 
-Các module backend chính:
+Backend được chia thành các route: `auth`, `users`, `friends`, `posts`, `chat`, `notifications`, `albums`, `upload` và `giphy`.
 
-- `auth`: đăng ký và đăng nhập.
-- `users`: hồ sơ, avatar, ảnh bìa, username, mật khẩu, tìm kiếm và chặn.
-- `friends`: lời mời, danh sách bạn bè và hủy kết bạn.
-- `posts`: bài viết, reaction, bình luận và chia sẻ.
-- `chat`: cuộc trò chuyện, tin nhắn, upload, reaction, presence và WebSocket.
-- `notifications`: danh sách, trạng thái đã đọc và WebSocket.
-- `albums`: album hệ thống/tùy chỉnh và đồng bộ media–timeline.
-- `upload`: upload media dùng chung.
-
-### Cấu trúc thư mục
+### Cấu trúc dự án
 
 ```text
 socialn/
 ├── backend/
 │   ├── app/
 │   │   ├── routes/
-│   │   ├── main.py
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   └── database.py
+│   │   ├── auth.py, config.py, database.py
+│   │   ├── main.py, models.py, schemas.py
+│   │   └── notifications.py, utils.py
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
-│   ├── src/
-│   │   ├── main.jsx
-│   │   └── styles.css
+│   ├── src/main.jsx
+│   ├── src/styles.css
+│   ├── src/i18n.js
 │   ├── Dockerfile
-│   ├── package.json
-│   └── vite.config.js
-├── docs/
-├── postman/
+│   └── package.json
+├── docs/architecture.md
+├── postman/SocialN.postman_collection.json
 ├── .env.example
 ├── docker-compose.yml
 └── README.md
 ```
 
-### Chạy bằng Docker — khuyến nghị
+### Chạy với Docker Compose (khuyến nghị)
 
-Yêu cầu:
-
-- Docker Engine/Desktop.
-- Docker Compose v2 (`docker compose`).
-- Các cổng `3306`, `8000` và `5173` đang trống.
-
-Các bước:
+Yêu cầu: Docker Engine/Desktop, Compose v2 và các cổng `3306`, `8000`, `5173` đang trống.
 
 ```bash
 git clone <YOUR_REPOSITORY_URL>
@@ -159,28 +136,36 @@ cd socialn
 cp .env.example .env
 ```
 
-Mở `.env` và thay mật khẩu cùng `JWT_SECRET` trước khi chạy. Sau đó:
+Mở `.env`, thay password, `JWT_SECRET` và thêm GIPHY API key nếu dùng GIF:
+
+```env
+GIPHY_API_KEY=your_giphy_api_key
+```
+
+Không dùng prefix `VITE_` cho key này: SocialN gọi GIPHY qua backend để tránh đưa key vào bundle trình duyệt.
 
 ```bash
 docker compose up -d --build
 ```
 
-Truy cập:
+| Dịch vụ | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| API | http://localhost:8000 |
+| Swagger UI | http://localhost:8000/docs |
+| ReDoc | http://localhost:8000/redoc |
+| Health check | http://localhost:8000/health |
 
-- Frontend: http://localhost:5173
-- API: http://localhost:8000
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- Health check: http://localhost:8000/health
-
-Xem log và dừng hệ thống:
+Các lệnh hữu ích:
 
 ```bash
-docker compose logs -f
+docker compose ps
+docker compose logs -f backend frontend
+docker compose up -d --build backend frontend
 docker compose down
 ```
 
-Dữ liệu MySQL nằm trong volume `mysql_data`; media nằm trong `uploads_data`, vì vậy `docker compose down` không xóa dữ liệu. Lệnh dưới đây **xóa vĩnh viễn cả database và uploads**:
+`docker compose down` giữ dữ liệu trong `mysql_data` và `uploads_data`. Lệnh sau xóa vĩnh viễn cả database và media:
 
 ```bash
 docker compose down -v
@@ -188,26 +173,24 @@ docker compose down -v
 
 ### Biến môi trường
 
-| Biến | Ý nghĩa | Ví dụ |
-|---|---|---|
-| `MYSQL_ROOT_PASSWORD` | Mật khẩu root của MySQL | `change_me_root` |
-| `MYSQL_DATABASE` | Tên database | `socialn` |
-| `MYSQL_USER` | Tài khoản ứng dụng | `socialn` |
-| `MYSQL_PASSWORD` | Mật khẩu tài khoản ứng dụng | `change_me` |
-| `DATABASE_URL` | Chuỗi kết nối SQLAlchemy khi chạy local | `mysql+pymysql://...` |
-| `JWT_SECRET` | Khóa ký access token | chuỗi ngẫu nhiên dài |
-| `JWT_EXPIRE_MINUTES` | Thời hạn token tính bằng phút | `1440` |
-| `CORS_ORIGINS` | Frontend được phép gọi API | `http://localhost:5173` |
-| `UPLOAD_DIR` | Thư mục upload khi chạy backend thủ công | `./uploads` |
-| `VITE_API_URL` | Địa chỉ API dùng khi build/chạy frontend | `http://localhost:8000` |
+| Biến | Mục đích |
+|---|---|
+| `MYSQL_ROOT_PASSWORD` | Mật khẩu root MySQL |
+| `MYSQL_DATABASE` | Tên database |
+| `MYSQL_USER`, `MYSQL_PASSWORD` | Tài khoản ứng dụng |
+| `DATABASE_URL` | SQLAlchemy connection URL khi chạy thủ công |
+| `JWT_SECRET` | Khóa ký JWT; phải dùng chuỗi ngẫu nhiên dài |
+| `JWT_EXPIRE_MINUTES` | Thời hạn access token, mặc định `1440` phút |
+| `CORS_ORIGINS` | Danh sách origin frontend, phân cách bằng dấu phẩy |
+| `GIPHY_API_KEY` | GIPHY key dùng ở backend |
+| `UPLOAD_DIR` | Thư mục upload khi chạy backend ngoài Docker |
+| `VITE_API_URL` | Base URL của API mà frontend gọi |
 
-Không commit `.env`. Repository chỉ nên chứa `.env.example`.
+Không commit `.env` hoặc API key. Chỉ commit `.env.example` với giá trị mẫu.
 
-### Chạy thủ công không dùng Docker
+### Chạy thủ công
 
-Bạn vẫn cần một MySQL đang chạy và một database đã được tạo.
-
-Backend:
+Cần một MySQL đã chạy và database đã được tạo.
 
 ```bash
 cd backend
@@ -215,49 +198,46 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-export DATABASE_URL='mysql+pymysql://socialn:change_me@127.0.0.1:3306/socialn'
+export DATABASE_URL='mysql+pymysql://socialn:password@127.0.0.1:3306/socialn'
 export JWT_SECRET='replace-with-a-long-random-secret'
 export CORS_ORIGINS='http://localhost:5173'
 export UPLOAD_DIR='./uploads'
+export GIPHY_API_KEY='your-giphy-api-key'
 
 uvicorn app.main:app --reload --port 8000
 ```
 
-Frontend, trong terminal khác:
+Trong terminal khác:
 
 ```bash
 cd frontend
 npm install
-npm run dev
+VITE_API_URL=http://localhost:8000 npm run dev
 ```
 
-### Postman
+### Kiểm thử API
 
-Import file:
+- Swagger: `http://localhost:8000/docs`.
+- Import `postman/SocialN.postman_collection.json` và đặt `base_url=http://localhost:8000`.
+- Health check: `curl http://localhost:8000/health`.
 
-```text
-postman/SocialN.postman_collection.json
-```
+### Lưu ý production
 
-Đặt collection variable `base_url` thành `http://localhost:8000`. Hãy đăng nhập trước; collection sẽ lưu JWT vào biến `token` nếu script của request login được giữ nguyên.
+- Startup hiện gọi `create_all` và bổ sung cột tương thích; production nên dùng Alembic migration.
+- Nên dùng HTTPS/reverse proxy, rate limiting, refresh token, xác minh email và quản lý session.
+- Nên chuyển media sang object storage, quét virus và kiểm duyệt nội dung.
+- File chat 2 GB cần cấu hình đồng bộ giới hạn body/timeout ở proxy và hạ tầng.
+- Khi chạy nhiều backend instance, dùng Redis/pub-sub cho WebSocket và presence.
+- Giới hạn/ràng buộc sử dụng GIPHY phụ thuộc tài khoản và điều khoản GIPHY của bạn.
 
-### Lưu ý bảo mật và triển khai production
+### Xử lý lỗi nhanh
 
-- Upload album không bị giới hạn ở tầng ứng dụng nhưng vẫn phụ thuộc dung lượng ổ đĩa, timeout, proxy và giới hạn hệ điều hành.
-- Dự án hiện tự tạo bảng và bổ sung một số cột khi startup; production nên dùng Alembic migration.
-- Nên bổ sung HTTPS, reverse proxy, rate limiting, refresh-token rotation, xác minh email và quản lý session.
-- Nên chuyển media sang S3/MinIO, quét virus và kiểm duyệt nội dung.
-- Khi scale nhiều backend instance, nên dùng Redis cho presence/pub-sub WebSocket.
-- Không sử dụng secret mặc định trong môi trường công khai.
-
-### Xử lý lỗi thường gặp
-
-- **Port đã được sử dụng:** đổi mapping port trong `docker-compose.yml` hoặc dừng service đang chiếm cổng.
-- **Backend chưa kết nối MySQL:** chờ healthcheck của database rồi xem `docker compose logs backend db`.
-- **Frontend gọi sai API:** kiểm tra `VITE_API_URL` trong service frontend.
-- **CORS:** thêm đúng origin frontend vào `CORS_ORIGINS`.
-- **Media không hiển thị:** kiểm tra volume `uploads_data`, URL backend và log upload.
-- **Thay đổi code chưa xuất hiện:** chạy lại `docker compose up -d --build` và hard refresh trình duyệt.
+- **GIF không tải:** kiểm tra `GIPHY_API_KEY`, rồi recreate backend: `docker compose up -d --force-recreate backend`.
+- **Frontend chưa cập nhật:** `docker compose up -d --build frontend`, sau đó hard refresh.
+- **Không kết nối database:** xem `docker compose logs db backend` và đợi healthcheck.
+- **CORS/API sai:** kiểm tra `CORS_ORIGINS` và `VITE_API_URL`.
+- **Media lỗi:** kiểm tra volume `uploads_data`, dung lượng ổ đĩa và log backend.
+- **Port bận:** đổi port mapping hoặc dừng service đang sử dụng cổng.
 
 ---
 
@@ -265,160 +245,141 @@ postman/SocialN.postman_collection.json
 
 ### Overview
 
-SocialN is a full-stack social networking application built with a React frontend, a FastAPI backend, and MySQL. It provides profiles, posts, friendships, notifications, real-time messaging, media albums, and backend-enforced privacy rules.
+SocialN combines a React 19 + Vite frontend, a FastAPI + SQLAlchemy backend, and MySQL 8.4. It provides profiles, a social feed, friendships, notifications, photo/video albums, realtime messaging, and GIPHY-powered GIFs.
 
-This is an independent learning/development project. It is not an official Facebook product and does not use Facebook's proprietary source code.
-
-### Features
+### Current features
 
 #### Accounts and profiles
 
-- JWT-based registration, login, and logout.
-- Editable name, birth date, hometown, gender, relationship status, and bio.
-- Username-based profile URLs such as `http://localhost:5173/username`.
+- JWT registration, login, and logout.
+- Username-based profile URLs such as `http://localhost:5173/thaituan`.
+- Edit name, bio, date of birth, hometown, gender, and relationship status.
 - Username changes with a 30-day cooldown.
 - Password changes, user search, blocking, and unblocking.
-- Upload, reposition, replace, and remove avatars and cover photos.
-- Avatar/cover updates create timeline posts using `his`, `her`, or `their` based on gender.
+- Avatar crop/selection, cover repositioning, replacement, and removal.
+- Avatar/cover changes create timeline posts using `his`, `her`, or `their` based on gender.
 
-#### Posts and engagement
+#### Posts
 
 - Create, edit, delete, and share posts.
-- Text/image posts; videos reach the timeline through album uploads.
-- `public`, `friends`, and `only_me` privacy levels.
-- Post comments.
-- Like, Love, Haha, Wow, Sad, and Angry reactions.
-- Notifications for reactions, comments, shares, messages, and friendship activity.
-- Styled in-app confirmation dialogs instead of browser-native prompts.
+- Text, image, GIPHY GIF, and Sticker/emoji content inserted at the caret like normal characters.
+- Trending/searchable GIF picker with preview and removal.
+- `public`, `friends`, and `only_me` privacy.
+- Comments and Like, Love, Haha, Wow, Sad, and Angry reactions.
+- Related activity notifications and custom confirmation dialogs in supported flows.
 
 #### Friends
 
-- Send, accept, or reject friend requests and unfriend users.
-- Mutual friends and “People You May Know” suggestions.
-- Blocking and privacy rules enforced by the backend.
+- Send, accept, or reject requests; unfriend users.
+- Friend lists, mutual friends, and People You May Know.
+- Backend-enforced privacy and blocking rules.
 
-#### Real-time messaging
+#### Messages
 
-- Durable REST message delivery plus real-time WebSocket updates.
-- REST polling fallback when WebSocket connectivity is interrupted.
-- Image, video, file, and voice attachments.
-- In-app image/video preview and file downloads.
-- Per-message reactions.
-- Online/offline presence, last active time, and typing indicators.
-- Unread message badges.
+- Direct messaging over REST + WebSocket with polling fallback.
+- Self-messaging Personal storage pinned to the top.
 - Pin, archive, and remove conversations from the inbox.
-- Self-messaging through a Personal storage conversation pinned to the top.
+- Send text, inline Sticker/emoji characters, GIPHY GIFs, images, videos, files, and voice messages.
+- Application-level per-file chat limit: **2048 MB (2 GB)**.
+- In-app media preview/download, message reactions, and auto-scroll after media loads.
+- Online/Offline, last active time, typing indicator, unread message and notification badges.
 
-#### Photo and video albums
+#### Photo/video albums
 
-- System albums for Profile pictures, Cover photos, and Timeline photos.
-- Custom albums with a name, description/notes, and privacy setting.
-- Edit album details or delete an entire custom album.
-- Multi-file image/video upload with no application-level count or size cap.
-- Select and delete individual album items.
-- Album uploads create corresponding timeline posts.
-- Deleting media/albums also removes linked posts and Timeline photo references.
-- Scrollable preview for media larger than the current screen.
+- System albums: Profile pictures, Cover photos, and Timeline photos.
+- Custom albums with name, description, and privacy.
+- Edit/delete albums; upload, select, and delete multiple media items.
+- Album media creates timeline posts; deletion synchronizes related posts and Timeline photos.
+- System albums are populated only through their corresponding profile/timeline flows.
+- Scrollable large-media viewer.
+- No application-level total album quota; practical limits still depend on storage, proxy, timeout, and server resources.
 
-#### Interface
+#### UI and languages
 
-- Responsive desktop and small-screen layout.
-- Light and Dark themes under Settings.
-- Theme preference persists in the browser.
-- A React Error Boundary prevents a component error from blanking the entire UI.
+- Responsive desktop/mobile UI and persistent Light/Dark themes.
+- Vietnamese, English, Korean, Japanese, Chinese, and Thai.
+- Language selection on authentication pages and in Settings.
+- Error Boundary prevents a component failure from producing a blank page.
 
-### Technology stack
+### Technology
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, Vite 7, Lucide React |
-| Backend | Python 3.12, FastAPI, Uvicorn |
-| ORM | SQLAlchemy 2 |
-| Database | MySQL 8.4 |
-| Authentication | JWT, bcrypt |
-| Real time | WebSocket |
-| Uploads | Multipart + Docker named volume |
-| Local deployment | Docker, Docker Compose |
-| Manual API testing | Swagger UI, Postman collection |
+| Frontend | React 19.1, Vite 7.1, Lucide React |
+| Backend | Python 3.12, FastAPI 0.116, Uvicorn |
+| ORM / DB | SQLAlchemy 2.0, PyMySQL, MySQL 8.4 |
+| Authentication | JWT, bcrypt/passlib |
+| Realtime | WebSocket + REST polling fallback |
+| Media | Multipart uploads and Docker volumes |
+| GIF | GIPHY Search/Trending through a backend proxy |
+| Local stack | Docker Compose |
 
-### Architecture
+### Architecture and repository layout
 
 ```text
-Browser
-  └── React + Vite (:5173)
-        ├── REST/JSON + multipart
-        └── WebSocket
-               │
-               ▼
-        FastAPI + Uvicorn (:8000)
-               │
-               ├── SQLAlchemy ──► MySQL 8.4 (:3306)
-               └── /uploads ────► Docker volume uploads_data
+Browser (React/Vite :5173)
+  ├─ REST/JSON, multipart
+  └─ WebSocket
+        ▼
+FastAPI/Uvicorn :8000
+  ├─ SQLAlchemy → MySQL :3306
+  ├─ /uploads → uploads_data
+  └─ GIPHY proxy → GIPHY API
 ```
-
-Primary backend modules are `auth`, `users`, `friends`, `posts`, `chat`, `notifications`, `albums`, and `upload`.
-
-### Project structure
 
 ```text
 socialn/
-├── backend/
-│   ├── app/
-│   │   ├── routes/
-│   │   ├── main.py
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   └── database.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── main.jsx
-│   │   └── styles.css
-│   ├── Dockerfile
-│   ├── package.json
-│   └── vite.config.js
-├── docs/
-├── postman/
+├── backend/app/        # API, models, schemas, route modules
+├── frontend/src/       # React entry, styles, translations
+├── docs/               # Architecture notes
+├── postman/            # API collection
 ├── .env.example
 ├── docker-compose.yml
 └── README.md
 ```
 
-### Run with Docker — recommended
+Backend route modules are `auth`, `users`, `friends`, `posts`, `chat`, `notifications`, `albums`, `upload`, and `giphy`.
 
-Requirements:
+### Run with Docker Compose (recommended)
 
-- Docker Engine/Desktop.
-- Docker Compose v2 (`docker compose`).
-- Available ports `3306`, `8000`, and `5173`.
-
-Setup and start:
+Requirements: Docker Engine/Desktop, Compose v2, and available ports `3306`, `8000`, and `5173`.
 
 ```bash
 git clone <YOUR_REPOSITORY_URL>
 cd socialn
 cp .env.example .env
-# Replace passwords and JWT_SECRET in .env before starting.
+```
+
+Edit `.env`: replace database passwords and `JWT_SECRET`, then add a GIPHY key to enable GIF search:
+
+```env
+GIPHY_API_KEY=your_giphy_api_key
+```
+
+The key intentionally has no `VITE_` prefix: GIPHY requests go through the backend so the key is not embedded in browser JavaScript.
+
+```bash
 docker compose up -d --build
 ```
 
-Open:
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| API | http://localhost:8000 |
+| Swagger UI | http://localhost:8000/docs |
+| ReDoc | http://localhost:8000/redoc |
+| Health check | http://localhost:8000/health |
 
-- Frontend: http://localhost:5173
-- API: http://localhost:8000
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- Health check: http://localhost:8000/health
-
-Logs and shutdown:
+Useful commands:
 
 ```bash
-docker compose logs -f
+docker compose ps
+docker compose logs -f backend frontend
+docker compose up -d --build backend frontend
 docker compose down
 ```
 
-MySQL data is stored in `mysql_data`, while user media is stored in `uploads_data`. A normal `docker compose down` keeps both volumes. The following command **permanently deletes the database and uploaded media**:
+`docker compose down` preserves `mysql_data` and `uploads_data`. The following command permanently deletes both database and uploaded media:
 
 ```bash
 docker compose down -v
@@ -426,26 +387,24 @@ docker compose down -v
 
 ### Environment variables
 
-| Variable | Purpose | Example |
-|---|---|---|
-| `MYSQL_ROOT_PASSWORD` | MySQL root password | `change_me_root` |
-| `MYSQL_DATABASE` | Database name | `socialn` |
-| `MYSQL_USER` | Application database user | `socialn` |
-| `MYSQL_PASSWORD` | Application database password | `change_me` |
-| `DATABASE_URL` | SQLAlchemy URL for a manual/local backend | `mysql+pymysql://...` |
-| `JWT_SECRET` | Access-token signing secret | a long random string |
-| `JWT_EXPIRE_MINUTES` | Token lifetime in minutes | `1440` |
-| `CORS_ORIGINS` | Frontend origins allowed to call the API | `http://localhost:5173` |
-| `UPLOAD_DIR` | Upload directory for a manually run backend | `./uploads` |
-| `VITE_API_URL` | API address used by the frontend | `http://localhost:8000` |
+| Variable | Purpose |
+|---|---|
+| `MYSQL_ROOT_PASSWORD` | MySQL root password |
+| `MYSQL_DATABASE` | Database name |
+| `MYSQL_USER`, `MYSQL_PASSWORD` | Application database account |
+| `DATABASE_URL` | SQLAlchemy connection URL for manual runs |
+| `JWT_SECRET` | JWT signing key; use a long random value |
+| `JWT_EXPIRE_MINUTES` | Access-token lifetime, default `1440` minutes |
+| `CORS_ORIGINS` | Comma-separated allowed frontend origins |
+| `GIPHY_API_KEY` | Server-side GIPHY API key |
+| `UPLOAD_DIR` | Upload directory for non-Docker backend runs |
+| `VITE_API_URL` | API base URL used by the frontend |
 
-Never commit `.env`; only `.env.example` should be tracked.
+Never commit `.env` or API keys. Commit only `.env.example` with placeholders.
 
 ### Run without Docker
 
-A running MySQL instance and an existing database are still required.
-
-Backend:
+Start MySQL and create the database first.
 
 ```bash
 cd backend
@@ -453,46 +412,43 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-export DATABASE_URL='mysql+pymysql://socialn:change_me@127.0.0.1:3306/socialn'
+export DATABASE_URL='mysql+pymysql://socialn:password@127.0.0.1:3306/socialn'
 export JWT_SECRET='replace-with-a-long-random-secret'
 export CORS_ORIGINS='http://localhost:5173'
 export UPLOAD_DIR='./uploads'
+export GIPHY_API_KEY='your-giphy-api-key'
 
 uvicorn app.main:app --reload --port 8000
 ```
 
-Frontend in another terminal:
+In another terminal:
 
 ```bash
 cd frontend
 npm install
-npm run dev
+VITE_API_URL=http://localhost:8000 npm run dev
 ```
 
-### Postman
+### API testing
 
-Import `postman/SocialN.postman_collection.json`, set the `base_url` collection variable to `http://localhost:8000`, and log in first. The login request script stores the JWT in the `token` variable.
+- Swagger: `http://localhost:8000/docs`.
+- Import `postman/SocialN.postman_collection.json` and set `base_url=http://localhost:8000`.
+- Health check: `curl http://localhost:8000/health`.
 
-### Production and security notes
+### Production notes
 
-- Album uploads have no application-level size cap, but disk capacity, timeouts, proxies, browsers, and the operating system still impose practical limits.
-- The application currently creates tables and adds selected columns at startup; production deployments should use Alembic migrations.
-- Add HTTPS, a reverse proxy, rate limiting, refresh-token rotation, email verification, and session/device management.
-- Move uploads to S3/MinIO and add malware scanning and content moderation.
-- Use Redis for presence/WebSocket pub-sub when running multiple backend instances.
-- Never deploy with the default development secrets.
+- Startup currently uses `create_all` and compatibility column additions; use Alembic migrations in production.
+- Add HTTPS/reverse proxying, rate limiting, refresh tokens, email verification, and session management.
+- Move media to object storage and add malware/content scanning.
+- A 2 GB chat upload requires matching body-size and timeout settings across the proxy and infrastructure.
+- Use Redis/pub-sub for WebSocket delivery and presence when scaling to multiple backend instances.
+- GIPHY usage limits and requirements depend on your GIPHY account and terms.
 
 ### Troubleshooting
 
-- **Port already in use:** change the port mapping in `docker-compose.yml` or stop the conflicting service.
-- **Backend cannot reach MySQL:** wait for the database healthcheck and inspect `docker compose logs backend db`.
-- **Frontend uses the wrong API:** verify `VITE_API_URL` in the frontend service.
-- **CORS error:** include the exact frontend origin in `CORS_ORIGINS`.
-- **Media does not load:** inspect `uploads_data`, backend URL configuration, and upload logs.
-- **Code changes are not visible:** rerun `docker compose up -d --build` and hard-refresh the browser.
-
----
-
-## License
-
-No license has been selected yet. Add a `LICENSE` file before distributing the project if you want to grant reuse rights.
+- **GIFs do not load:** verify `GIPHY_API_KEY`, then run `docker compose up -d --force-recreate backend`.
+- **Frontend changes are stale:** rebuild with `docker compose up -d --build frontend`, then hard refresh.
+- **Database connection fails:** inspect `docker compose logs db backend` and wait for the healthcheck.
+- **CORS/wrong API:** verify `CORS_ORIGINS` and `VITE_API_URL`.
+- **Media fails:** inspect `uploads_data`, free disk space, and backend logs.
+- **Port conflict:** change Compose port mappings or stop the conflicting service.
