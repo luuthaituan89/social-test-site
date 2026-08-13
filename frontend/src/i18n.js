@@ -44,6 +44,8 @@ const relationshipWorkflowExtras={
 for(const [locale,values] of Object.entries(relationshipWorkflowExtras))Object.assign(dictionaries[locale],values);
 const friendSearchLabels={en:"Search your friends to tag...",vi:"Tìm trong danh sách bạn bè để gắn thẻ...",ko:"태그할 친구 검색...",ja:"タグする友達を検索...",zh:"搜索要标记的好友...",th:"ค้นหาเพื่อนที่จะแท็ก..."};
 for(const [locale,label] of Object.entries(friendSearchLabels))dictionaries[locale]["Search for a person to tag..."]=label;
+const groupWelcomeLabels={en:"Welcome to {name}",vi:"Chào mừng bạn đến với nhóm {name}",ko:"{name} 그룹에 오신 것을 환영합니다",ja:"{name}グループへようこそ",zh:"欢迎加入{name}小组",th:"ยินดีต้อนรับสู่กลุ่ม {name}"};
+for(const [locale,label] of Object.entries(groupWelcomeLabels))dictionaries[locale]["Welcome to {name}"]=label;
 let current="en",observer=null,applying=false;
 const textState=new WeakMap(),attrState=new WeakMap();
 const ignored=".post-content,.comment-body,.bubble,.profile-bio,.shared-content,.album-card small,.album-modal-title p";
@@ -53,6 +55,7 @@ function translated(value){
   if(trimmed.startsWith("Sent "))return value.replace(trimmed,`${dictionaries[current]?.Sent||"Sent"} ${trimmed.slice(5)}`);
   const withdraw=trimmed.match(/^Withdraw the friend request sent to (.+)\?$/);
   if(withdraw)return value.replace(trimmed,translate("Withdraw the friend request sent to {name}?",{name:withdraw[1]}));
+  if(trimmed.startsWith("Welcome to "))return value.replace(trimmed,translate("Welcome to {name}",{name:trimmed.slice(11)}));
   for(const template of ["{name} wants to add you to their relationship status","{name} accepted your relationship request","{name} declined your relationship request"]){const suffix=template.replace("{name}","");if(trimmed.endsWith(suffix))return value.replace(trimmed,translate(template,{name:trimmed.slice(0,-suffix.length)}))}
   return value;
 }

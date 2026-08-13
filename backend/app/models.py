@@ -133,6 +133,74 @@ class Conversation(Base):
     cleared_at_b: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class ChatGroup(Base):
+    __tablename__ = "chat_groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    require_admin_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    theme: Mapped[str] = mapped_column(String(40), default="default")
+    quick_reaction: Mapped[str] = mapped_column(String(20), default="👍")
+    invite_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    invite_token: Mapped[str | None] = mapped_column(String(80), unique=True, nullable=True)
+    member_customization: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ChatGroupMember(Base):
+    __tablename__ = "chat_group_members"
+    __table_args__ = (UniqueConstraint("chat_group_id", "user_id", name="uq_chat_group_member"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_group_id: Mapped[int] = mapped_column(ForeignKey("chat_groups.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(20), default="member")
+    nickname: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    muted_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notification_sound: Mapped[str] = mapped_column(String(40), default="default")
+    last_read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ChatGroupJoinRequest(Base):
+    __tablename__ = "chat_group_join_requests"
+    __table_args__ = (UniqueConstraint("chat_group_id", "user_id", name="uq_chat_group_join_request"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_group_id: Mapped[int] = mapped_column(ForeignKey("chat_groups.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ChatPoll(Base):
+    __tablename__ = "chat_polls"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_group_id: Mapped[int] = mapped_column(ForeignKey("chat_groups.id", ondelete="CASCADE"), index=True)
+    creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    question: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ChatPollOption(Base):
+    __tablename__ = "chat_poll_options"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    poll_id: Mapped[int] = mapped_column(ForeignKey("chat_polls.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(300))
+
+
+class ChatPollVote(Base):
+    __tablename__ = "chat_poll_votes"
+    __table_args__ = (UniqueConstraint("poll_id", "user_id", name="uq_chat_poll_vote"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    poll_id: Mapped[int] = mapped_column(ForeignKey("chat_polls.id", ondelete="CASCADE"), index=True)
+    option_id: Mapped[int] = mapped_column(ForeignKey("chat_poll_options.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Message(Base):
     __tablename__ = "messages"
 
@@ -231,4 +299,116 @@ class ActivityLog(Base):
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(150), index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rules: Mapped[str | None] = mapped_column(Text, nullable=True)
+    privacy: Mapped[str] = mapped_column(String(20), default="public", index=True)
+    visibility: Mapped[str] = mapped_column(String(20), default="visible", index=True)
+    group_type: Mapped[str] = mapped_column(String(30), default="general")
+    cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    approval_questions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    allow_anonymous_posts: Mapped[bool] = mapped_column(Boolean, default=True)
+    require_post_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+    __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_group_member"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(20), default="member")
+    posting_muted_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GroupJoinRequest(Base):
+    __tablename__ = "group_join_requests"
+    __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_group_join_request"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    answers: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class GroupBan(Base):
+    __tablename__ = "group_bans"
+    __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_group_ban"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    banned_by_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GroupPost(Base):
+    __tablename__ = "group_posts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    media_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    media_type: Mapped[str] = mapped_column(String(20), default="image")
+    is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="published", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class GroupPostReaction(Base):
+    __tablename__ = "group_post_reactions"
+    __table_args__ = (UniqueConstraint("post_id", "user_id", name="uq_group_post_reaction"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("group_posts.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    reaction: Mapped[str] = mapped_column(String(20), default="like")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GroupPostComment(Base):
+    __tablename__ = "group_post_comments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("group_posts.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class GroupPostHidden(Base):
+    __tablename__ = "group_post_hidden"
+    __table_args__ = (UniqueConstraint("post_id", "user_id", name="uq_group_post_hidden"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("group_posts.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GroupReport(Base):
+    __tablename__ = "group_reports"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
+    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    post_id: Mapped[int | None] = mapped_column(ForeignKey("group_posts.id", ondelete="CASCADE"), nullable=True, index=True)
+    comment_id: Mapped[int | None] = mapped_column(ForeignKey("group_post_comments.id", ondelete="CASCADE"), nullable=True)
+    reason: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

@@ -1,4 +1,4 @@
-import React,{Component,useEffect,useRef,useState}from"react";import{createRoot}from"react-dom/client";import{Search,Home,Users,MessageCircle,Bell,Settings,Image as ImageIcon,ThumbsUp,MessageSquare,Share2,Send,LogOut,Camera,UserPlus,UserCheck,ShieldBan,Menu,X,Check,MoreHorizontal,MoreVertical,Edit2,Trash2,Pin,Archive,Paperclip,Mic,Square,FileText,Download,Maximize2,Sun,Moon,Languages,Smile,History,Reply}from"lucide-react";import{LANGUAGES,setSiteLanguage,translate}from"./i18n";import"./styles.css";
+import React,{Component,useEffect,useRef,useState}from"react";import{createRoot}from"react-dom/client";import{Search,Home,Users,UsersRound,MessageCircle,Bell,Settings,Image as ImageIcon,ThumbsUp,MessageSquare,Share2,Send,LogOut,Camera,UserPlus,UserCheck,ShieldBan,Menu,X,Check,MoreHorizontal,MoreVertical,Edit2,Trash2,Pin,Archive,Paperclip,Mic,Square,FileText,Download,Maximize2,Sun,Moon,Languages,Smile,History,Reply,Info,Copy,Volume2,Link2}from"lucide-react";import{LANGUAGES,setSiteLanguage,translate}from"./i18n";import"./styles.css";
 const API=import.meta.env.VITE_API_URL||"http://localhost:8000",WS=API.replace(/^http/,"ws");const tok=()=>localStorage.getItem("socialn_token"),asset=u=>u?(/^https?:\/\//i.test(u)?u:`${API}${u}`):null;
 const TIMEZONES=[
   ["auto","Automatic (device)"],["UTC","UTC"],["Asia/Ho_Chi_Minh","Vietnam — Hanoi/Ho Chi Minh City (UTC+7)"],
@@ -529,14 +529,38 @@ function ConversationRow({conversation,active,onOpen,onChanged,onDeleted,persona
       onChanged?.();
     }catch(e){alert(e.message)}
   }
-  return <div className={`conversation-row ${active?"active":""} ${conversation.archived?"archived":""} ${personalStorage?"self-vault":""}`}>
-    <button className="conversation-main" onClick={onOpen}><Avatar user={conversation.user}/><span>{conversation.user.name}{personalStorage?" (You)":""}{conversation.pinned&&!personalStorage&&<small className="pinned-label"><Pin size={11}/> Pinned</small>}<small>{conversation.last_message||({image:"Photo",video:"Video",voice:"Voice message",file:"File",sticker:"Sticker",gif:"GIF"}[conversation.last_message_type])||(personalStorage?"Personal storage":`@${conversation.user.username}`)}</small></span></button>
-    <div className="conversation-menu-wrap"><button className="conversation-more" onClick={()=>setMenu(!menu)} aria-label="Conversation actions"><MoreVertical size={18}/></button>{menu&&<div className="conversation-menu">
+  const displayUser=conversation.is_group?{name:conversation.name,avatar_url:conversation.avatar_url}:conversation.user;
+  return <div className={`conversation-row ${active?"active":""} ${conversation.archived?"archived":""} ${personalStorage?"self-vault":""} ${conversation.unread_count>0&&!active?"has-unread":""}`}>
+    <button className="conversation-main" onClick={onOpen}><Avatar user={displayUser}/><span>{displayUser.name}{personalStorage?" (You)":""}{conversation.is_group&&<small>{(conversation.members?.length||0)+(conversation.is_group_draft?1:0)} members{conversation.is_group_draft?" · Draft":""}</small>}{conversation.pinned&&!personalStorage&&<small className="pinned-label"><Pin size={11}/> Pinned</small>}<small>{conversation.last_message||({image:"Photo",video:"Video",voice:"Voice message",file:"File",sticker:"Sticker",gif:"GIF"}[conversation.last_message_type])||(personalStorage?"Personal storage":conversation.is_group?"Group chat":`@${conversation.user.username}`)}</small></span></button>
+    {conversation.unread_count>0&&!active&&<span className="conversation-unread-count">{conversation.unread_count>99?"99+":conversation.unread_count}</span>}
+    {!conversation.is_group_draft&&<div className="conversation-menu-wrap"><button className="conversation-more" onClick={()=>setMenu(!menu)} aria-label="Conversation actions"><MoreVertical size={18}/></button>{menu&&<div className="conversation-menu">
       {!personalStorage&&<button onClick={()=>action("pin")}><Pin size={15}/>{conversation.pinned?"Unpin":"Pin"}</button>}
       {!personalStorage&&<button onClick={()=>action("archive")}><Archive size={15}/>{conversation.archived?"Unarchive":"Archive"}</button>}
       <button className="danger-link" onClick={()=>action("delete")}><Trash2 size={15}/>Delete chat</button>
-    </div>}</div>
+    </div>}</div>}
   </div>
+}
+
+function NewGroupChatModal({friends,onClose,onCreate}){
+  const[name,setName]=useState(""),[query,setQuery]=useState(""),[selected,setSelected]=useState([]),[approval,setApproval]=useState(false);
+  const visible=friends.filter(x=>`${x.name} ${x.username}`.toLowerCase().includes(query.toLowerCase()));
+  function submit(e){e.preventDefault();if(!name.trim()||!selected.length)return;onCreate({is_group:true,is_group_draft:true,name:name.trim(),member_ids:selected,members:friends.filter(x=>selected.includes(x.id)),require_admin_approval:approval})}
+  return <div className="modal-backdrop" onMouseDown={onClose}><form className="card new-chat-group" onMouseDown={e=>e.stopPropagation()} onSubmit={submit}><div className="section-head"><div><h2>Create a new group</h2><p>The group activates after the first message is sent.</p></div><button type="button" className="icon-btn" onClick={onClose}><X/></button></div><label>Group name<input autoFocus maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Name your group"/></label><div className="group-chat-member-search"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search friends..."/></div><div className="group-chat-picker">{visible.map(item=><label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={()=>setSelected(v=>v.includes(item.id)?v.filter(id=>id!==item.id):[...v,item.id])}/><Avatar user={item}/><span><b>{item.name}</b><small>@{item.username}</small></span></label>)}</div><label className="group-chat-approval"><input type="checkbox" checked={approval} onChange={e=>setApproval(e.target.checked)}/> Require admin approval for members joining through invitations</label><div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={!name.trim()||!selected.length}>Create</button></div></form></div>
+}
+
+function GroupChatInfo({group,friends,onClose,onChanged,onApplied,onLeave}){
+  const[details,setDetails]=useState(group),[busy,setBusy]=useState(false),[media,setMedia]=useState([]),[friendRows,setFriendRows]=useState(friends);
+  const isAdmin=details.my_role==="admin",memberIds=new Set((details.members||[]).map(x=>Number(x.id))),available=friendRows.filter(x=>!memberIds.has(Number(x.id)));
+  async function reload(){const d=await api(`/api/chat/group-conversations/${group.group_chat_id}/messages`);setDetails({...d.group,group_chat_id:d.group.id,is_group:true});setMedia(d.messages.filter(x=>x.attachment_url));onChanged?.()}
+  async function save(){setBusy(true);try{const result=await api(`/api/chat/group-conversations/${group.group_chat_id}`,{method:"PUT",body:JSON.stringify({name:details.name,avatar_url:details.avatar_url||null,theme:details.theme||"default",quick_reaction:details.quick_reaction||"👍",require_admin_approval:Boolean(details.require_admin_approval),invite_enabled:Boolean(details.invite_enabled),member_customization:Boolean(details.member_customization)})});const updated={...group,...result.group,id:group.id,group_chat_id:group.group_chat_id,is_group:true};Object.assign(group,updated);setDetails(updated);onApplied?.(updated);onChanged?.();onClose()}catch(e){alert(e.message)}finally{setBusy(false)}}
+  async function avatar(file){if(!file)return;const fd=new FormData();fd.append("file",file);try{const up=await api("/api/chat/upload",{method:"POST",body:fd});setDetails(v=>({...v,avatar_url:up.url}))}catch(e){alert(e.message)}}
+  async function memberAction(member,action){try{if(action==="remove")await api(`/api/chat/group-conversations/${group.group_chat_id}/members/${member.id}`,{method:"DELETE"});else if(action==="add")await api(`/api/chat/group-conversations/${group.group_chat_id}/members/${member.id}`,{method:"POST"});else await api(`/api/chat/group-conversations/${group.group_chat_id}/members/${member.id}/role?role=${action}`,{method:"PUT"});await reload()}catch(e){alert(e.message)}}
+  async function nickname(member){const value=window.prompt(`Nickname for ${member.name}`,member.nickname||"");if(value===null)return;try{await api(`/api/chat/group-conversations/${group.group_chat_id}/members/${member.id}/nickname?nickname=${encodeURIComponent(value)}`,{method:"PUT"});await reload()}catch(e){alert(e.message)}}
+  async function preferences(minutes,sound=details.notification_sound||"default"){try{await api(`/api/chat/group-conversations/${group.group_chat_id}/preferences?mute_minutes=${minutes}&sound=${encodeURIComponent(sound)}`,{method:"PUT"});await reload()}catch(e){alert(e.message)}}
+  async function reviewRequest(request,action){try{await api(`/api/chat/group-conversations/${group.group_chat_id}/join-requests/${request.id}/${action}`,{method:"POST"});await reload()}catch(e){alert(e.message)}}
+  useEffect(()=>{reload().catch(()=>{});if(!friendRows.length)api("/api/friends").then(setFriendRows).catch(()=>{})},[]);
+  const inviteUrl=details.invite_token?`${location.origin}/messages/invite/${details.invite_token}`:"";
+  return <div className="modal-backdrop group-info-backdrop" onMouseDown={onClose}><aside className="group-chat-info" onMouseDown={e=>e.stopPropagation()}><div className="group-info-head"><b>Group settings</b><button onClick={onClose}><X/></button></div><div className="group-info-scroll"><section className="group-info-identity"><label><Avatar user={details} size={72}/>{isAdmin&&<><Camera size={17}/><input hidden type="file" accept="image/*" onChange={e=>avatar(e.target.files?.[0])}/></>}</label><input disabled={!isAdmin} value={details.name||""} onChange={e=>setDetails(v=>({...v,name:e.target.value}))}/></section><section><h3>Customize chat</h3><label>Theme<select disabled={!isAdmin&&!details.member_customization} value={details.theme||"default"} onChange={e=>setDetails(v=>({...v,theme:e.target.value}))}><option value="default">Default</option><option value="ocean">Ocean gradient</option><option value="sunset">Sunset gradient</option><option value="forest">Forest</option><option value="event">Celebration</option><option value="cinema">Cinema</option></select></label><label>Quick reaction<select disabled={!isAdmin&&!details.member_customization} value={details.quick_reaction||"👍"} onChange={e=>setDetails(v=>({...v,quick_reaction:e.target.value}))}>{["👍","❤️","😂","😮","😢","🔥","🎉"].map(x=><option key={x}>{x}</option>)}</select></label>{isAdmin&&<label className="toggle-row"><input type="checkbox" checked={Boolean(details.member_customization)} onChange={e=>setDetails(v=>({...v,member_customization:e.target.checked}))}/> Allow members to customize name, photo and theme</label>}{isAdmin&&<button className="primary" disabled={busy} onClick={save}>Save customization</button>}</section><section><h3>Members</h3>{details.members?.map(member=><div className="group-info-member" key={member.id}><Avatar user={member}/><span><b>{member.nickname||member.name}</b><small>{member.nickname?`${member.name} · `:""}{member.role}</small></span><button onClick={()=>nickname(member)}>Nickname</button>{isAdmin&&Number(member.id)!==Number(group.creator_id)&&<div><button onClick={()=>memberAction(member,member.role==="admin"?"member":"admin")}>{member.role==="admin"?"Remove admin":"Make admin"}</button><button className="danger-link" onClick={()=>memberAction(member,"remove")}>Remove</button></div>}</div>)}{isAdmin&&available.length>0&&<details><summary>Add members</summary>{available.map(member=><button className="group-info-add" key={member.id} onClick={()=>memberAction(member,"add")}><Avatar user={member}/>{member.name}<UserPlus size={17}/></button>)}</details>}</section><section><h3>Invitations & approval</h3>{isAdmin&&<><label className="toggle-row"><input type="checkbox" checked={Boolean(details.require_admin_approval)} onChange={e=>setDetails(v=>({...v,require_admin_approval:e.target.checked}))}/> Admin approval required</label><label className="toggle-row"><input type="checkbox" checked={Boolean(details.invite_enabled)} onChange={e=>setDetails(v=>({...v,invite_enabled:e.target.checked}))}/> Enable invitation link</label><button className="secondary" onClick={save}>Save invitation settings</button></>}{inviteUrl&&<button className="copy-invite" onClick={()=>navigator.clipboard.writeText(inviteUrl)}><Link2 size={17}/><span>{inviteUrl}</span><Copy size={16}/></button>}</section><section><h3>Notifications</h3><label>Mute<select value="" onChange={e=>preferences(Number(e.target.value))}><option value="">Choose duration</option><option value="15">15 minutes</option><option value="60">1 hour</option><option value="480">8 hours</option><option value="1440">24 hours</option><option value="-1">Until turned back on</option><option value="0">Turn notifications on</option></select></label><label><Volume2 size={16}/> Notification sound<select value={details.notification_sound||"default"} onChange={e=>preferences(details.muted_until?-1:0,e.target.value)}><option value="default">Default</option><option value="soft">Soft</option><option value="pop">Pop</option><option value="none">No sound</option></select></label></section><section><h3>Media & files</h3><div className="group-info-media">{media.map(item=><a key={item.id} href={asset(item.attachment_url)} target="_blank" rel="noreferrer">{item.message_type==="image"||item.message_type==="gif"?<img src={asset(item.attachment_url)}/>:<><FileText/><small>{item.attachment_name||item.message_type}</small></>}</a>)}{!media.length&&<p className="muted">No shared media or files.</p>}</div></section><section className="group-info-danger"><button className="danger" onClick={onLeave}>Leave group</button><button className="secondary">Report group</button></section></div></aside></div>
 }
 
 function MediaPreview({media,onClose}){
@@ -548,7 +572,7 @@ function MediaPreview({media,onClose}){
   </div></div>
 }
 
-function Chat({me,target,open,onChanged}){
+function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,friends=[]}){
   const [messages,setMessages]=useState([]);
   const [text,setText]=useState("");
   const [connected,setConnected]=useState(false);
@@ -571,6 +595,10 @@ function Chat({me,target,open,onChanged}){
   const[gifQuery,setGifQuery]=useState(""),[gifResults,setGifResults]=useState([]),[gifLoading,setGifLoading]=useState(false),[gifError,setGifError]=useState("");
   const[replyingTo,setReplyingTo]=useState(null),[messageMenu,setMessageMenu]=useState(null);
   const[forwarding,setForwarding]=useState(null),[forwardTargets,setForwardTargets]=useState([]),[actionBusy,setActionBusy]=useState(false);
+  const[pollOpen,setPollOpen]=useState(false),[pollQuestion,setPollQuestion]=useState(""),[pollOptions,setPollOptions]=useState(["",""]);
+  const[groupInfoOpen,setGroupInfoOpen]=useState(false);
+  const[settingsNotice,setSettingsNotice]=useState("");
+  const[mentionIndex,setMentionIndex]=useState(0);
 
   function lastActiveLabel(value){
     if(!value)return "Offline";
@@ -604,6 +632,7 @@ function Chat({me,target,open,onChanged}){
       is_forwarded:Boolean(x.is_forwarded||x.forwarded_from_id),
       is_pinned:Boolean(x.is_pinned),
       is_unsent:Boolean(x.is_unsent),
+      poll:x.poll||null,
       created_at:x.created_at||new Date().toISOString()
     };
   }
@@ -631,7 +660,8 @@ function Chat({me,target,open,onChanged}){
   async function loadHistory(silent=false){
     if(!target?.id)return;
     try{
-      const rows=await api(`/api/chat/${target.id}/messages`);
+      const response=await api(target.is_group?`/api/chat/group-conversations/${target.group_chat_id}/messages`:`/api/chat/${target.id}/messages`);
+      const rows=target.is_group?response.messages:response;
       if(Array.isArray(rows))mergeMessages(rows);
       onChanged?.();
     }catch(e){
@@ -640,9 +670,9 @@ function Chat({me,target,open,onChanged}){
   }
 
   useEffect(()=>{
-    setMessages([]);setSelectedStickers([]);setShowStickers(false);setSelectedGif(null);setShowGifPicker(false);setGifQuery("");setReplyingTo(null);setMessageMenu(null);setForwarding(null);
-    if(target?.id)loadHistory();
-  },[target?.id]);
+    setMessages([]);setSelectedStickers([]);setShowStickers(false);setSelectedGif(null);setShowGifPicker(false);setGifQuery("");setReplyingTo(null);setMessageMenu(null);setForwarding(null);setIsOtherTyping(false);
+    if(target?.id&&!target.is_group_draft)loadHistory();
+  },[target?.id,target?.group_chat_id]);
 
   useEffect(()=>{
     if(!showGifPicker)return;
@@ -659,12 +689,12 @@ function Chat({me,target,open,onChanged}){
   },[showGifPicker,gifQuery]);
 
   useEffect(()=>{
-    if(!target?.id)return;
+    if(!target?.id||target.is_group)return;
     let stopped=false;
     async function loadPresence(){try{const d=await api(`/api/chat/presence/${target.id}`);if(!stopped)setPresence(d)}catch(e){console.error(e)}}
     loadPresence();const timer=setInterval(loadPresence,10000);
     return()=>{stopped=true;clearInterval(timer)};
-  },[target?.id]);
+  },[target?.id,target?.is_group]);
 
   useEffect(()=>{
     scrollChatToEnd();
@@ -672,10 +702,10 @@ function Chat({me,target,open,onChanged}){
 
   // REST polling fallback: guarantees incoming messages even if WebSocket/proxy fails.
   useEffect(()=>{
-    if(!target?.id)return;
+    if(!target?.id||target.is_group_draft)return;
     const timer=setInterval(()=>loadHistory(true),2500);
     return()=>clearInterval(timer);
-  },[target?.id]);
+  },[target?.id,target?.group_chat_id]);
 
   useEffect(()=>{
     let stopped=false;
@@ -717,6 +747,7 @@ function Chat({me,target,open,onChanged}){
             setMessages(prev=>prev.map(m=>m.id===Number(data.message_id)?{...m,...data,content:data.is_unsent?"":m.content,attachment_url:data.is_unsent?null:m.attachment_url,sticker:data.is_unsent?null:m.sticker,reaction_counts:data.is_unsent?{}:m.reaction_counts}:m));
             return;
           }
+          if(data?.type==="poll_updated"&&data.message){mergeMessages(data.message);return}
           if(data?.type==="typing"){
             if(Number(data.from_user_id)===Number(target?.id)&&Number(data.to_user_id)===Number(me.id)){
               setIsOtherTyping(Boolean(data.is_typing));clearTimeout(typingHideRef.current);
@@ -731,10 +762,13 @@ function Chat({me,target,open,onChanged}){
 
           const currentId=Number(target.id);
           const meId=Number(me.id);
-          const belongs=
-            (x.from_user_id===currentId&&x.to_user_id===meId)||
-            (x.from_user_id===meId&&x.to_user_id===currentId)||
-            (x.sender_id===currentId);
+          const belongs=target.is_group
+            ? Number(data.group_chat_id)===Number(target.group_chat_id)
+            : !data.group_chat_id&&(
+              (x.from_user_id===currentId&&x.to_user_id===meId)||
+              (x.from_user_id===meId&&x.to_user_id===currentId)||
+              (x.sender_id===currentId)
+            );
 
           if(belongs)mergeMessages(x);
           onChanged?.();
@@ -767,7 +801,7 @@ function Chat({me,target,open,onChanged}){
 
   async function send(){
     const value=text.trim();
-    if(!target?.id||(!value&&!selectedStickers.length&&!selectedGif)||sending)return;
+    if(!target||(!value&&!selectedStickers.length&&!selectedGif)||sending)return;
 
     setSending(true);
     setText("");
@@ -777,13 +811,16 @@ function Chat({me,target,open,onChanged}){
     emitTyping(false);
 
     try{
-      const result=await api(`/api/chat/${target.id}/messages`,{
+      const messageData=gifToSend?{content:value,message_type:"gif",attachment_url:gifToSend.url,attachment_name:gifToSend.title||"GIPHY GIF",attachment_mime:"image/gif",reply_to_id:replyingTo?.id||null}:{content:value,message_type:stickersToSend.length?"sticker":"text",sticker:stickersToSend.length?JSON.stringify(stickersToSend):null,reply_to_id:replyingTo?.id||null};
+      const result=await api(target.is_group_draft?"/api/chat/group-conversations":target.is_group?`/api/chat/group-conversations/${target.group_chat_id}/messages`:`/api/chat/${target.id}/messages`,{
         method:"POST",
-        body:JSON.stringify(gifToSend?{content:value,message_type:"gif",attachment_url:gifToSend.url,attachment_name:gifToSend.title||"GIPHY GIF",attachment_mime:"image/gif",reply_to_id:replyingTo?.id||null}:{content:value,message_type:stickersToSend.length?"sticker":"text",sticker:stickersToSend.length?JSON.stringify(stickersToSend):null,reply_to_id:replyingTo?.id||null})
+        body:JSON.stringify(target.is_group_draft?{name:target.name,member_ids:target.member_ids,require_admin_approval:target.require_admin_approval,first_message:messageData}:messageData)
       });
+      const sent=result.message||result;
+      if(target.is_group_draft)onGroupActivated?.({...result.group,id:result.group.id,group_chat_id:result.group.id});
       setReplyingTo(null);
-      mergeMessages(result);
-      await loadHistory(true);
+      mergeMessages(sent);
+      if(!target.is_group_draft)await loadHistory(true);
       onChanged?.();
     }catch(e){
       console.error("Send message failed:",e);
@@ -797,6 +834,7 @@ function Chat({me,target,open,onChanged}){
   }
 
   function emitTyping(isTyping){
+    if(target?.is_group)return;
     try{if(target?.id!==me.id&&wsRef.current?.readyState===WebSocket.OPEN)wsRef.current.send(JSON.stringify({type:"typing",to_user_id:target.id,is_typing:isTyping}))}catch{}
   }
   function changeText(value){
@@ -815,13 +853,14 @@ function Chat({me,target,open,onChanged}){
   }
 
   async function uploadAttachment(file,forcedType){
-    if(!target?.id||!file||sending)return;
+    if(!target||!file||sending)return;
     setSending(true);
     try{
       const fd=new FormData();fd.append("file",file);
       const uploaded=await api("/api/chat/upload",{method:"POST",body:fd});
-      const result=await api(`/api/chat/${target.id}/messages`,{method:"POST",body:JSON.stringify({content:"",message_type:forcedType||uploaded.message_type,attachment_url:uploaded.url,attachment_name:uploaded.name,attachment_mime:uploaded.mime,reply_to_id:replyingTo?.id||null})});
-      mergeMessages(result);setReplyingTo(null);onChanged?.();
+      const messageData={content:"",message_type:forcedType||uploaded.message_type,attachment_url:uploaded.url,attachment_name:uploaded.name,attachment_mime:uploaded.mime,reply_to_id:replyingTo?.id||null};
+      const result=await api(target.is_group_draft?"/api/chat/group-conversations":target.is_group?`/api/chat/group-conversations/${target.group_chat_id}/messages`:`/api/chat/${target.id}/messages`,{method:"POST",body:JSON.stringify(target.is_group_draft?{name:target.name,member_ids:target.member_ids,require_admin_approval:target.require_admin_approval,first_message:messageData}:messageData)});
+      mergeMessages(result.message||result);if(target.is_group_draft)onGroupActivated?.({...result.group,id:result.group.id,group_chat_id:result.group.id});setReplyingTo(null);onChanged?.();
     }catch(e){alert(`Could not send attachment: ${e.message}`)}finally{setSending(false)}
   }
 
@@ -874,19 +913,39 @@ function Chat({me,target,open,onChanged}){
     }catch(e){alert("Microphone access is required to record voice messages.")}
   }
 
+  async function createPoll(){
+    if(!target?.is_group||target.is_group_draft||!pollQuestion.trim()||pollOptions.filter(x=>x.trim()).length<2)return;
+    try{const result=await api(`/api/chat/group-conversations/${target.group_chat_id}/polls`,{method:"POST",body:JSON.stringify({question:pollQuestion,options:pollOptions})});mergeMessages(result);setPollOpen(false);setPollQuestion("");setPollOptions(["",""])}catch(e){alert(e.message)}
+  }
+  async function votePoll(pollId,optionId){try{const result=await api(`/api/chat/polls/${pollId}/vote/${optionId}`,{method:"POST"});mergeMessages(result)}catch(e){alert(e.message)}}
+  async function sendQuickReaction(){try{const result=await api(`/api/chat/group-conversations/${target.group_chat_id}/messages`,{method:"POST",body:JSON.stringify({content:target.quick_reaction||"👍",message_type:"text"})});mergeMessages(result);onChanged?.()}catch(e){alert(e.message)}}
+
+  const mentionMatch=target?.is_group?text.match(/(^|\s)@([^\s@]*)$/):null;
+  const mentionQuery=(mentionMatch?.[2]||"").toLowerCase();
+  const mentionCandidates=mentionMatch?[{id:"all",name:"Everyone",username:"all",nickname:"Notify all group members"},...(target.members||[]).filter(member=>Number(member.id)!==Number(me.id))].filter(member=>`${member.name||""} ${member.username||""} ${member.nickname||""}`.toLowerCase().includes(mentionQuery)).slice(0,8):[];
+  function insertMention(member){
+    if(!mentionMatch)return;
+    const start=text.length-mentionMatch[0].length+mentionMatch[1].length;
+    const value=`${text.slice(0,start)}@${member.username} `;
+    changeText(value);setMentionIndex(0);setTimeout(()=>composeInputRef.current?.focus(),0);
+  }
+
   if(!target)return <div className="card empty chat-empty">Choose someone to message.</div>;
 
-  return <div className="chat card">
-    <button className="chat-head profile-button" onClick={()=>open(target.id)}>
+  return <div className={`chat card ${target.is_group?`chat-theme-${target.theme||"default"}`:""}`}>
+    {settingsNotice&&<div className="chat-settings-notice"><Check size={17}/>{settingsNotice}</div>}
+    <div className="chat-head profile-button" onClick={()=>!target.is_group&&open(target.id)}>
       <Avatar user={target}/>
       <div>
         <b>{target.name}</b>
-        <div className={`presence-line small ${presence.online?"online":"offline"}`}><span className="presence-dot"/>{presence.online?"Online":lastActiveLabel(presence.last_seen_at)}</div>
+        {target.is_group?<div className="small muted">{(target.members?.length||0)+(target.is_group_draft?1:0)} members{target.is_group_draft?" · Draft":""}</div>:<div className={`presence-line small ${presence.online?"online":"offline"}`}><span className="presence-dot"/>{presence.online?"Online":lastActiveLabel(presence.last_seen_at)}</div>}
       </div>
-    </button>
+      {target.is_group&&!target.is_group_draft&&<button className="group-chat-info-trigger" title="Group information and settings" onClick={e=>{e.stopPropagation();setGroupInfoOpen(true)}}><Info size={21}/></button>}
+    </div>
 
     <div className="messages">
       {messages.map(x=><div key={x.id} className={`bubble ${x.sender_id===Number(me.id)?"mine":""} attachment-bubble`}>
+        {target.is_group&&x.sender_id!==Number(me.id)&&<div className="group-message-sender">{target.members?.find(member=>Number(member.id)===Number(x.sender_id))?.name||"Group member"}</div>}
         {x.is_pinned&&<div className="message-pinned"><Pin size={12}/> Pinned</div>}
         {x.is_forwarded&&<div className="message-forwarded"><Share2 size={12}/> Forwarded</div>}
         {x.reply_to&&<button className="message-reply-preview" onClick={()=>document.getElementById(`message-${x.reply_to.id}`)?.scrollIntoView({behavior:"smooth",block:"center"})}><b>{Number(x.reply_to.sender_id)===Number(me.id)?"You":target.name}</b><span>{messageSummary(x.reply_to)}</span></button>}
@@ -896,6 +955,7 @@ function Chat({me,target,open,onChanged}){
         {x.message_type==="voice"&&x.attachment_url&&<audio className="chat-audio" controls src={asset(x.attachment_url)}/>}
         {x.message_type==="file"&&x.attachment_url&&<a className="chat-file" href={asset(x.attachment_url)} download={x.attachment_name}><FileText size={22}/><span>{x.attachment_name||"Download file"}</span><Download size={17}/></a>}
         {x.message_type==="gif"&&x.attachment_url&&<button className="chat-media-button chat-gif-button" onClick={()=>setPreviewMedia({type:"image",url:asset(x.attachment_url),name:x.attachment_name})}><img className="chat-gif" src={asset(x.attachment_url)} alt={x.attachment_name||"GIF"} onLoad={()=>scrollChatToEnd("auto")}/><span className="gif-label">GIF</span></button>}
+        {x.message_type==="poll"&&x.poll&&<div className="chat-poll"><b>{x.poll.question}</b>{x.poll.options.map(option=><button key={option.id} onClick={()=>votePoll(x.poll.id,option.id)}><span>{option.label}</span><small>{option.votes} vote{option.votes===1?"":"s"}</small></button>)}</div>}
         {x.is_unsent?<div className="message-unsent">This message was unsent</div>:x.message_type==="sticker"?<div className={`message-with-sticker ${x.content&&x.sticker?"mixed":"sticker-only"}`}>{x.content&&x.sticker&&<span className="message-text">{x.content}</span>}<span className="message-stickers" role="img" aria-label="Stickers">{(x.stickers.length?x.stickers:messageStickers(x.sticker||x.content)).map((item,index)=><span className="message-sticker" key={`${item}-${index}`}>{item}</span>)}</span></div>:x.content&&<div className={x.message_type==="gif"?"gif-caption":undefined}>{x.content}</div>}
         {!x.is_unsent&&<div className="message-actions"><div className="message-reaction-control"><button className="message-react-trigger" title="React">{x.my_reaction?reactionInfo(x.my_reaction).emoji:"☺"}</button><div className="message-reaction-picker">{REACTIONS.map(r=><button key={r.key} title={r.label} onClick={()=>reactMessage(x.id,r.key)}>{r.emoji}</button>)}</div></div><button className="message-action-button" title="Reply" onClick={()=>{setReplyingTo(x);setMessageMenu(null);composeInputRef.current?.focus()}}><Reply size={15}/></button><div className="message-more-wrap"><button className="message-action-button" title="More" onClick={()=>setMessageMenu(messageMenu===x.id?null:x.id)}><MoreVertical size={16}/></button>{messageMenu===x.id&&<div className="message-action-menu">{x.sender_id===Number(me.id)&&<button disabled={actionBusy} onClick={()=>unsendMessage(x)}><Trash2 size={15}/> Unsend</button>}<button disabled={actionBusy} onClick={()=>openForward(x)}><Share2 size={15}/> Forward</button><button disabled={actionBusy} onClick={()=>toggleMessagePin(x)}><Pin size={15}/> {x.is_pinned?"Unpin":"Pin"}</button></div>}</div></div>}
         {Object.keys(x.reaction_counts||{}).length>0&&<div className="message-reaction-summary">{Object.entries(x.reaction_counts).filter(([,n])=>n>0).map(([key,n])=><span key={key}>{reactionInfo(key).emoji}{n>1?n:""}</span>)}</div>}
@@ -905,12 +965,15 @@ function Chat({me,target,open,onChanged}){
     </div>
 
     {replyingTo&&<div className="chat-replying"><Reply size={17}/><div><b>Replying to {replyingTo.sender_id===Number(me.id)?"yourself":target.name}</b><span>{messageSummary(replyingTo)}</span></div><button title="Cancel reply" onClick={()=>setReplyingTo(null)}><X size={18}/></button></div>}
+    {pollOpen&&<div className="chat-poll-composer"><div><b>Create poll</b><button onClick={()=>setPollOpen(false)}><X size={17}/></button></div><input value={pollQuestion} onChange={e=>setPollQuestion(e.target.value)} placeholder="Ask a question"/>{pollOptions.map((value,index)=><input key={index} value={value} onChange={e=>setPollOptions(items=>items.map((item,i)=>i===index?e.target.value:item))} placeholder={`Option ${index+1}`}/>)}<div><button className="secondary" onClick={()=>setPollOptions(items=>[...items,""])}>Add option</button><button className="primary" onClick={createPoll}>Create poll</button></div></div>}
+    {mentionCandidates.length>0&&<div className="mention-picker"><div className="mention-picker-title">Mention someone</div>{mentionCandidates.map((member,index)=><button type="button" key={member.id} className={index===mentionIndex?"active":""} onMouseDown={e=>{e.preventDefault();insertMention(member)}}>{member.id==="all"?<span className="mention-all">@</span>:<Avatar user={member} size={34}/>}<span><b>{member.nickname||member.name}</b><small>{member.id==="all"?"Notify everyone in this group":`@${member.username}`}</small></span></button>)}</div>}
     <div className="chat-input">
       <label className="chat-tool" title="Send image or video"><ImageIcon size={19}/><input hidden type="file" accept="image/*,video/*" onChange={e=>{const f=e.target.files?.[0];uploadAttachment(f,f?.type.startsWith("video/")?"video":"image");e.target.value=""}}/></label>
       <label className="chat-tool" title="Send file"><Paperclip size={19}/><input hidden type="file" onChange={e=>{uploadAttachment(e.target.files?.[0],"file");e.target.value=""}}/></label>
       <button type="button" className={`chat-tool ${recording?"recording":""}`} title={recording?"Stop recording":"Record voice"} onClick={toggleRecording}>{recording?<Square size={17}/>:<Mic size={19}/>}</button>
       <div className="chat-sticker-control"><button type="button" className={`chat-tool ${showStickers?"active":""}`} title="Stickers" onClick={()=>{setShowStickers(!showStickers);setShowGifPicker(false)}}><Smile size={20}/></button>{showStickers&&<div className="sticker-library chat-sticker-library"><div className="sticker-library-head"><div><b>Stickers</b><small>Insert stickers like normal text</small></div><button type="button" className="icon-btn" onClick={()=>setShowStickers(false)}><X size={18}/></button></div><div className="sticker-grid">{STICKERS.map((item,index)=><button type="button" key={`chat-${item}-${index}`} onClick={()=>insertChatSticker(item)}>{item}</button>)}</div></div>}</div>
       <div className="chat-gif-control"><button type="button" className={`chat-tool gif-tool ${showGifPicker?"active":""}`} title="Send a GIF" onClick={()=>{setShowGifPicker(!showGifPicker);setShowStickers(false)}}>GIF</button>{showGifPicker&&<div className="gif-picker"><div className="gif-picker-head"><b>Choose a GIF</b><button type="button" className="icon-btn" onClick={()=>setShowGifPicker(false)}><X size={18}/></button></div><input autoFocus value={gifQuery} onChange={e=>setGifQuery(e.target.value)} placeholder="Search GIPHY..."/><div className="gif-grid">{gifLoading&&<div className="gif-status">Loading GIFs...</div>}{gifError&&<div className="gif-status error">{gifError}</div>}{!gifLoading&&!gifError&&!gifResults.length&&<div className="gif-status">No GIFs found.</div>}{gifResults.map(item=><button type="button" key={item.id} title={item.title} onClick={()=>{setSelectedGif(item);setSelectedStickers([]);setShowGifPicker(false);setTimeout(()=>composeInputRef.current?.focus(),0)}}><img src={item.preview_url} alt={item.title} loading="lazy"/></button>)}</div><div className="giphy-credit">Powered by GIPHY</div></div>}</div>
+      {target.is_group&&!target.is_group_draft&&<button type="button" className="chat-tool poll-tool" title="Create poll" onClick={()=>setPollOpen(v=>!v)}>Poll</button>}
       <div className={`chat-compose-field ${selectedStickers.length||selectedGif?"has-sticker":""}`}>
         <input
           ref={composeInputRef}
@@ -920,6 +983,9 @@ function Chat({me,target,open,onChanged}){
           placeholder={`Message ${target.name}...`}
           onChange={e=>changeText(e.target.value)}
           onKeyDown={e=>{
+            if(mentionCandidates.length&&(e.key==="ArrowDown"||e.key==="ArrowUp")){e.preventDefault();setMentionIndex(index=>(index+(e.key==="ArrowDown"?1:-1)+mentionCandidates.length)%mentionCandidates.length);return}
+            if(mentionCandidates.length&&(e.key==="Enter"||e.key==="Tab")){e.preventDefault();insertMention(mentionCandidates[Math.min(mentionIndex,mentionCandidates.length-1)]);return}
+            if(mentionCandidates.length&&e.key==="Escape"){e.preventDefault();changeText(`${text} `);return}
             if(e.key==="Enter"&&!e.shiftKey){
               e.preventDefault();
               send();
@@ -933,9 +999,11 @@ function Chat({me,target,open,onChanged}){
       <button type="button" className="primary" disabled={sending||(!text.trim()&&!selectedStickers.length&&!selectedGif)} onClick={send}>
         <Send size={18}/>
       </button>
+      {target.is_group&&!text.trim()&&!selectedGif&&<button type="button" className="chat-quick-reaction" title="Quick reaction" onClick={sendQuickReaction}>{target.quick_reaction||"👍"}</button>}
     </div>
     {forwarding&&<div className="forward-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setForwarding(null)}}><div className="forward-dialog card"><div className="forward-head"><div><b>Forward message</b><small>{messageSummary(forwarding)}</small></div><button onClick={()=>setForwarding(null)}><X size={19}/></button></div><div className="forward-list">{forwardTargets.length===0?<div className="empty compact">No conversations available.</div>:forwardTargets.map(item=><button disabled={actionBusy} key={item.user.id} onClick={()=>forwardTo(item.user)}><Avatar user={item.user} size={40}/><span><b>{item.user.name}</b><small>@{item.user.username}</small></span><Send size={17}/></button>)}</div></div></div>}
     {previewMedia&&<MediaPreview media={previewMedia} onClose={()=>setPreviewMedia(null)}/>} 
+    {groupInfoOpen&&<GroupChatInfo group={target} friends={friends} onClose={()=>setGroupInfoOpen(false)} onChanged={onChanged} onApplied={updated=>{onGroupSettingsChanged?.(updated);setSettingsNotice("Group customization applied");setTimeout(()=>setSettingsNotice(""),2600)}} onLeave={async()=>{if(!await confirmDialog({title:"Leave group chat?",message:"You will stop receiving messages from this group.",confirmLabel:"Leave"}))return;try{await api(`/api/chat/group-conversations/${target.group_chat_id}/members/${me.id}`,{method:"DELETE"});setGroupInfoOpen(false);location.assign("/messages")}catch(e){alert(e.message)}}}/>} 
   </div>
 }
 
@@ -1048,11 +1116,55 @@ function App(){const[user,setUser]=useState(null),[view,setView]=useState("home"
   <PostComposer onCreated={p=>setFeed(v=>[p,...v])}/>
   {feed.length===0?<div className="card empty">No posts yet. Create the first post.</div>:feed.map(p=><PostCard key={p.id} post={p} me={user} onOpenProfile={open} onUpdated={updated=>setFeed(v=>v.map(x=>x.id===updated.id?updated:x))} onDeleted={id=>setFeed(v=>v.filter(x=>x.id!==id))}/>)}
 </>}{view==="profile"&&profile&&<Profile p={profile} me={user} reload={reload} message={message} open={open}/>} {view==="friends"&&<div className="friends-page"><div className="card friends-section"><h2>Friend requests</h2>{requests.map(r=><div className="request-row" key={r.id}><Avatar user={r.user} onClick={()=>open(r.user.id)}/><button className="name-block" onClick={()=>open(r.user.id)}><b>{r.user.name}</b></button><button className="primary" onClick={async()=>{await api(`/api/friends/${r.id}/accept`,{method:"POST"});refresh()}}>Confirm</button><button className="secondary" onClick={async()=>{await api(`/api/friends/${r.id}/reject`,{method:"POST"});refresh()}}>Delete</button></div>)}</div><div className="card friends-section"><h2>Your friends</h2><div className="people-grid">{friends.map(u=><div className="person" key={u.id}><Avatar user={u} onClick={()=>open(u.id)}/><button className="name-link" onClick={()=>open(u.id)}>{u.name}</button><button className="secondary" onClick={()=>message(u)}>Message</button></div>)}</div></div><div className="card friends-section"><h2>People you may know</h2><div className="people-grid">{suggestions.map(u=><div className="person" key={u.id}><Avatar user={u} onClick={()=>open(u.id)}/><button className="name-link" onClick={()=>open(u.id)}>{u.name}</button><small>{u.mutual_friends_count} mutual friends</small><button className="primary" onClick={async()=>{await api(`/api/friends/${u.id}`,{method:"POST"});refresh()}}>Add friend</button></div>)}</div></div></div>} {view==="chat"&&<div className="chat-layout"><div className="conversation-list card"><div className="conversation-title">Messages</div>{conversations.filter(c=>c?.user?.id).map(c=><button key={`c-${c.id}`} className={Number(target?.id)===Number(c.user.id)?"active":""} onClick={()=>setTarget(c.user)}><Avatar user={c.user}/><span>{c.user.name||c.user.username}<small>{c.last_message||`@${c.user.username}`}</small></span></button>)}{friends.filter(u=>u?.id&&!conversations.some(c=>Number(c?.user?.id)===Number(u.id))).map(u=><button key={`f-${u.id}`} className={Number(target?.id)===Number(u.id)?"active":""} onClick={()=>setTarget(u)}><Avatar user={u}/><span>{u.name}<small>Start a conversation</small></span></button>)}</div><Chat me={user} target={target} open={open} onChanged={loadC}/></div>} {view==="notifications"&&<div className="card notifications-page">{notifs.map(n=><button className="notification-row" key={n.id} onClick={()=>read(n)}>{n.message}</button>)}</div>} {view==="settings"&&<SettingsPage user={user}/>} </main></div></div>}
-const RESERVED_PATHS=new Set(["settings","friends","messages","notifications","activity-log"]);
+function GroupPostCard({group,item,onChanged,onPin}){
+  const[comment,setComment]=useState(""),[menu,setMenu]=useState(false);
+  async function react(reaction){try{await api(`/api/groups/${group.id}/posts/${item.id}/react`,{method:"POST",body:JSON.stringify({reaction})});onChanged()}catch(e){alert(e.message)}}
+  async function addComment(e){e.preventDefault();if(!comment.trim())return;try{await api(`/api/groups/${group.id}/posts/${item.id}/comments`,{method:"POST",body:JSON.stringify({content:comment})});setComment("");onChanged()}catch(e){alert(e.message)}}
+  async function share(){try{await api(`/api/groups/${group.id}/posts/${item.id}/share`,{method:"POST"});alert("Post shared to your timeline") }catch(e){alert(e.message)}}
+  async function hide(){try{await api(`/api/groups/${group.id}/posts/${item.id}/hide`,{method:"POST"});setMenu(false);onChanged()}catch(e){alert(e.message)}}
+  async function report(){if(!await confirmDialog({variant:"confirm",title:"Report this post?",message:"The report will be sent to this group's Admins and Moderators.",confirmLabel:"Send report"}))return;try{await api(`/api/groups/${group.id}/posts/${item.id}/report`,{method:"POST",body:JSON.stringify({reason:"Reported as potentially violating group rules"})});setMenu(false);alert("Report sent") }catch(e){alert(e.message)}}
+  return <article className="card group-post"><div className="post-head">{item.author?<Avatar user={item.author}/>:<div className="anonymous-avatar">?</div>}<div><b>{item.author?.name||"Anonymous member"}</b><small>{formatDateTime(item.created_at)}</small></div>{item.is_pinned&&<span className="pinned-label"><Pin size={14}/> Pinned</span>}{item.can_moderate&&<button className="icon-btn" title={item.is_pinned?"Unpin":"Pin post"} onClick={()=>onPin(item)}><Pin size={18}/></button>}<div className="post-menu-wrap"><button className="icon-btn" aria-label="Post options" onClick={()=>setMenu(!menu)}><MoreHorizontal size={19}/></button>{menu&&<div className="post-menu"><button onClick={hide}>Hide post</button><button onClick={report}>Report post</button>{item.can_delete&&<button className="danger-link" onClick={async()=>{if(await confirmDialog({title:"Delete group post?",message:"This post will be permanently removed."})){await api(`/api/groups/${group.id}/posts/${item.id}`,{method:"DELETE"});onChanged()}}}><Trash2 size={16}/> Delete post</button>}</div>}</div></div><p>{item.content}</p>{item.media_url&&(item.media_type==="video"?<video className="group-post-media" src={asset(item.media_url)} controls/>:item.media_type==="image"||item.media_type==="gif"?<img className="group-post-media" src={asset(item.media_url)}/>:<a className="group-file-link" href={asset(item.media_url)} target="_blank" rel="noreferrer"><FileText/> Open attached file</a>)}<div className="post-stats"><span className="reaction-summary">{Object.entries(item.reaction_counts||{}).filter(([,count])=>count).map(([key])=><span key={key}>{reactionInfo(key).emoji}</span>)} {item.reactions_count||0} reactions</span><span>{item.comments?.length||0} comments</span></div><div className="post-buttons"><div className="reaction-wrap"><button className={item.my_reaction?"active":""} onClick={()=>react(item.my_reaction||"like")}><span>{item.my_reaction?reactionInfo(item.my_reaction).emoji:<ThumbsUp size={18}/>}</span> {item.my_reaction?reactionInfo(item.my_reaction).label:"Like"}</button><div className="reaction-picker">{REACTIONS.map(option=><button key={option.key} title={option.label} onClick={()=>react(option.key)}>{option.emoji}</button>)}</div></div><button onClick={()=>document.getElementById(`group-comment-${item.id}`)?.focus()}><MessageSquare size={18}/> Comment</button>{item.can_share&&<button onClick={share}><Share2 size={18}/> Share</button>}</div><div className="group-comments">{(item.comments||[]).map(row=><div className="comment" key={row.id}><Avatar user={row.author} size={32}/><div className="comment-body"><b>{row.author.name}</b><div>{row.content}</div></div></div>)}</div><form className="comment-form" onSubmit={addComment}><input id={`group-comment-${item.id}`} value={comment} onChange={e=>setComment(e.target.value)} placeholder="Write a comment..."/><button className="primary"><Send size={17}/></button></form></article>
+}
+
+function GroupsPage({groupId,onOpen}){
+  const[groups,setGroups]=useState([]),[group,setGroup]=useState(null),[posts,setPosts]=useState([]),[query,setQuery]=useState(""),[creating,setCreating]=useState(false),[error,setError]=useState("");
+  const[form,setForm]=useState({name:"",description:"",rules:"",privacy:"public",visibility:"visible",group_type:"general",approval_questions:[""]});
+  const[joinAnswers,setJoinAnswers]=useState([]),[post,setPost]=useState({content:"",is_anonymous:false}),[mediaFile,setMediaFile]=useState(null),[busy,setBusy]=useState(false),[coverBusy,setCoverBusy]=useState(false),[tab,setTab]=useState("about"),[memberQuery,setMemberQuery]=useState(""),[memberMenu,setMemberMenu]=useState(null),[addMemberOpen,setAddMemberOpen]=useState(false),[addMemberQuery,setAddMemberQuery]=useState(""),[addMemberResults,setAddMemberResults]=useState([]),[editingGroup,setEditingGroup]=useState(false),[groupDraft,setGroupDraft]=useState(null);
+  async function loadList(q=query){try{setGroups(await api(`/api/groups?q=${encodeURIComponent(q)}`));setError("")}catch(e){setError(e.message)}}
+  async function loadGroup(){if(!groupId){setGroup(null);loadList();return}try{const row=await api(`/api/groups/${groupId}`);setGroup(row);setJoinAnswers((row.approval_questions||[]).map(()=>""));if(row.can_view_content)setPosts(await api(`/api/groups/${groupId}/posts`));else setPosts([]);setError("")}catch(e){setError(e.message)}}
+  useEffect(()=>{loadGroup()},[groupId]);
+  async function create(e){e.preventDefault();setBusy(true);try{const row=await api("/api/groups",{method:"POST",body:JSON.stringify({...form,approval_questions:form.approval_questions.filter(x=>x.trim())})});setCreating(false);onOpen(row.id)}catch(e){setError(e.message)}finally{setBusy(false)}}
+  async function join(){try{await api(`/api/groups/${group.id}/join`,{method:"POST",body:JSON.stringify({answers:joinAnswers})});loadGroup()}catch(e){setError(e.message)}}
+  async function leave(){if(!await confirmDialog({variant:"confirm",title:"Leave group?",message:`You will no longer have access to member-only content in ${group.name}.`,confirmLabel:"Leave group"}))return;try{await api(`/api/groups/${group.id}/membership`,{method:"DELETE"});loadGroup()}catch(e){setError(e.message)}}
+  async function publish(e){e.preventDefault();if(!post.content.trim()&&!mediaFile)return;try{let media_url=null,media_type="image";if(mediaFile){const body=new FormData();body.append("file",mediaFile);media_url=(await api("/api/upload",{method:"POST",body})).url;media_type=mediaFile.type.startsWith("video/")?"video":mediaFile.type.startsWith("image/")?"image":"file"}const created=await api(`/api/groups/${group.id}/posts`,{method:"POST",body:JSON.stringify({...post,media_url,media_type})});setPost({content:"",is_anonymous:false});setMediaFile(null);if(created.status==="pending")alert("Your post was submitted for Admin/Moderator approval.");loadGroup()}catch(e){setError(e.message)}}
+  async function review(id,action){try{await api(`/api/groups/${group.id}/requests/${id}/${action}`,{method:"POST"});loadGroup()}catch(e){setError(e.message)}}
+  async function togglePin(item){try{await api(`/api/groups/${group.id}/posts/${item.id}/pin`,{method:"POST"});loadGroup()}catch(e){setError(e.message)}}
+  async function memberAction(item,action){setMemberMenu(null);try{if(action==="kick"||action==="ban"){if(!await confirmDialog({title:action==="ban"?"Ban member?":"Remove member?",message:`${item.name} will be removed from this group${action==="ban"?" and cannot rejoin":""}.`,confirmLabel:action==="ban"?"Ban":"Remove"}))return;await api(`/api/groups/${group.id}/members/${item.id}?ban=${action==="ban"}`,{method:"DELETE"})}else if(action.startsWith("role:")){await api(`/api/groups/${group.id}/members/${item.id}/role?role=${action.slice(5)}`,{method:"PUT"})}else{await api(`/api/groups/${group.id}/members/${item.id}/mute?hours=${action==="unmute"?0:action==="mute_week"?168:24}`,{method:"POST"})}loadGroup()}catch(e){setError(e.message)}}
+  async function saveGroup(e){e.preventDefault();try{await api(`/api/groups/${group.id}`,{method:"PUT",body:JSON.stringify({...groupDraft,approval_questions:(groupDraft.approval_questions||[]).filter(Boolean)})});setEditingGroup(false);loadGroup()}catch(e){setError(e.message)}}
+  async function changeCover(file){if(!file)return;setCoverBusy(true);setError("");try{const body=new FormData();body.append("file",file);const uploaded=await api("/api/upload",{method:"POST",body});await api(`/api/groups/${group.id}/cover`,{method:"PUT",body:JSON.stringify({cover_url:uploaded.url})});await loadGroup()}catch(e){setError(e.message)}finally{setCoverBusy(false)}}
+  async function searchPeople(){try{const rows=await api(`/api/users/search?q=${encodeURIComponent(addMemberQuery.trim())}`),memberIds=new Set((group.members||[]).map(item=>Number(item.id)));setAddMemberResults(rows.filter(item=>!memberIds.has(Number(item.id))))}catch(e){setError(e.message)}}
+  async function addMember(item){try{await api(`/api/groups/${group.id}/members/${item.id}`,{method:"POST"});setAddMemberResults(rows=>rows.filter(row=>row.id!==item.id));await loadGroup()}catch(e){setError(e.message)}}
+  function postCard(item){return <GroupPostCard key={item.id} group={group} item={item} onChanged={loadGroup} onPin={togglePin}/>}
+  if(!groupId)return <div className="groups-page"><div className="card groups-toolbar"><div><h1>Groups</h1><p>Connect and share with communities that matter to you.</p></div><button className="primary" onClick={()=>setCreating(!creating)}>{creating?"Cancel":"Create group"}</button></div>{creating&&<form className="card group-create" onSubmit={create}><h2>Create a group</h2><label>Group name<input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Description<textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></label><label>Group rules<textarea value={form.rules} onChange={e=>setForm({...form,rules:e.target.value})} placeholder="Write each rule on a new line..."/></label><div className="group-form-grid"><label>Privacy<select value={form.privacy} onChange={e=>setForm({...form,privacy:e.target.value})}><option value="public">Public</option><option value="private">Private</option></select></label><label>Visibility<select value={form.visibility} onChange={e=>setForm({...form,visibility:e.target.value})}><option value="visible">Visible</option><option value="hidden">Hidden</option></select></label><label>Group type<select value={form.group_type} onChange={e=>setForm({...form,group_type:e.target.value})}><option value="general">General</option><option value="social_learning">Social Learning</option><option value="buy_sell">Buy and Sell</option><option value="work_project">Work / Project</option></select></label></div><label>Membership questions (maximum 3){form.approval_questions.map((value,index)=><input key={index} value={value} placeholder={`Question ${index+1}`} onChange={e=>setForm({...form,approval_questions:form.approval_questions.map((x,i)=>i===index?e.target.value:x)})}/>)}</label>{form.approval_questions.length<3&&<button type="button" className="secondary" onClick={()=>setForm({...form,approval_questions:[...form.approval_questions,""]})}>Add question</button>}<button className="primary" disabled={busy}>Create group</button></form>}<div className="card group-discovery"><div className="group-search"><Search size={19}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search groups..."/><button onClick={()=>loadList(query)}>Search</button></div>{error&&<div className="error">{error}</div>}<div className="group-grid">{groups.map(item=><button className="group-card" key={item.id} onClick={()=>onOpen(item.id)}><div className="group-cover">{item.cover_url?<img src={asset(item.cover_url)}/>:<Users size={42}/>}</div><b>{item.name}</b><span>{item.privacy==="private"?"🔒 Private":"🌐 Public"} · {item.member_count} members</span><small>{item.description||"No description"}</small></button>)}</div></div></div>;
+  if(!group)return <div className="card empty">{error||"Loading group..."}</div>;
+  const mediaPosts=posts.filter(item=>["image","video","gif"].includes(item.media_type)&&item.media_url),filePosts=posts.filter(item=>item.media_type==="file"&&item.media_url),filteredMembers=(group.members||[]).filter(item=>!memberQuery.trim()||`${item.name} ${item.username}`.toLowerCase().includes(memberQuery.trim().toLowerCase()));
+  return <div className="groups-page group-detail"><section className="card group-hero">
+<div className="group-hero-cover">{group.cover_url?<img src={asset(group.cover_url)}/>:<Users size={70}/>} {group.my_role==="admin"&&<label className={`group-cover-change ${coverBusy?"busy":""}`}><Camera size={18}/>{coverBusy?"Uploading...":"Change cover photo"}<input hidden type="file" accept="image/*" disabled={coverBusy} onChange={e=>{changeCover(e.target.files?.[0]);e.target.value=""}}/></label>}</div>
+<div className="group-hero-info"><div><h1>{group.name}</h1><p>{group.privacy==="private"?"🔒 Private group":"🌐 Public group"} · {group.visibility==="hidden"?"Hidden":"Visible"} · {group.member_count} members</p></div>{group.membership_status==="member"?<button className="secondary" onClick={leave}>Joined · Leave</button>:group.membership_status==="pending"?<button className="secondary" disabled>Request pending</button>:<button className="primary" onClick={join}>Join group</button>}</div><p>{group.description||"No description"}</p><nav className="group-tabs">{[["about","About"],["discussion","Discussion"],["featured","Featured"],["people","People"],["media","Media"],["files","Files"]].map(([key,label])=><button key={key} className={tab===key?"active":""} onClick={()=>setTab(key)}>{label}</button>)}</nav></section>{error&&<div className="error">{error}</div>}{group.membership_status==="none"&&group.approval_questions.length>0&&<section className="card group-questions"><h2>Answer membership questions</h2>{group.approval_questions.map((question,index)=><label key={index}>{question}<textarea value={joinAnswers[index]||""} onChange={e=>setJoinAnswers(joinAnswers.map((x,i)=>i===index?e.target.value:x))}/></label>)}</section>}{group.join_requests?.length>0&&<section className="card group-requests"><h2>Membership requests</h2>{group.join_requests.map(request=><div className="group-request" key={request.id}><Avatar user={request.user}/><div><b>{request.user.name}</b>{request.answers.map((answer,index)=><small key={index}>{group.approval_questions[index]} — {answer}</small>)}</div><button className="primary" onClick={()=>review(request.id,"approve")}>Approve</button><button className="secondary" onClick={()=>review(request.id,"decline")}>Decline</button></div>)}</section>}
+
+{group.pending_posts?.length>0&&<section className="card group-requests"><h2>Posts awaiting approval</h2>{group.pending_posts.map(item=><div className="group-request" key={item.id}><Avatar user={item.author}/><div><b>{item.author.name}</b><small>{item.content||"Media post"}</small></div><button className="primary" onClick={async()=>{await api(`/api/groups/${group.id}/posts/${item.id}/moderate/approve`,{method:"POST"});loadGroup()}}>Approve</button><button className="secondary" onClick={async()=>{await api(`/api/groups/${group.id}/posts/${item.id}/moderate/decline`,{method:"POST"});loadGroup()}}>Decline</button></div>)}</section>}{group.open_reports?.length>0&&<section className="card group-requests"><h2>Member reports</h2>{group.open_reports.map(report=><div className="group-request" key={report.id}><div><b>{report.reporter.name}</b><small>{report.reason} · Post #{report.post_id}</small></div><button className="secondary" onClick={async()=>{await api(`/api/groups/${group.id}/reports/${report.id}/resolve`,{method:"POST"});loadGroup()}}>Mark resolved</button></div>)}</section>}
+{addMemberOpen&&<div className="modal-backdrop" onMouseDown={()=>setAddMemberOpen(false)}><div className="card group-add-member" onMouseDown={e=>e.stopPropagation()}><div className="section-head"><div><h2>Add member</h2><p>Search by name or username.</p></div><button className="icon-btn" onClick={()=>setAddMemberOpen(false)}><X/></button></div><form className="group-add-search" onSubmit={e=>{e.preventDefault();searchPeople()}}><input autoFocus value={addMemberQuery} onChange={e=>setAddMemberQuery(e.target.value)} placeholder="Search people..."/><button className="primary"><Search size={18}/> Search</button></form><div className="group-add-results">{addMemberResults.map(item=><div key={item.id}><Avatar user={item}/><span><b>{item.name}</b><small>@{item.username}</small></span><button className="primary" onClick={()=>addMember(item)}>Add</button></div>)}{addMemberQuery&&addMemberResults.length===0&&<p className="muted">No users found or everyone is already a member.</p>}</div></div></div>}
+{tab==="about"&&<section className="card group-about"><div className="section-head"><h2>About this group</h2>{group.membership_status==="member"&&<button className="secondary" onClick={async()=>{await api(`/api/groups/${group.id}/notifications?enabled=${!group.notifications_enabled}`,{method:"POST"});loadGroup()}}>{group.notifications_enabled?"Turn off notifications":"Turn on notifications"}</button>}</div>
+<h3>Purpose</h3><p>{group.description||"No description has been added."}</p><div className="group-facts"><span>{group.privacy==="private"?"🔒 Private":"🌐 Public"}</span><span>{group.visibility==="hidden"?"🙈 Hidden":"👁 Visible"}</span><span>👥 {group.member_count} members</span></div><h3>Group rules</h3><div className="group-rules">{group.rules?group.rules.split("\n").filter(Boolean).map((rule,index)=><div key={index}><b>{index+1}</b><span>{rule}</span></div>):<p>No group rules have been added.</p>}</div>{group.members&&<><h3>Admins and moderators</h3><div className="group-people-grid">{group.members.filter(item=>item.role!=="member").map(item=><div className="group-person" key={item.id}><Avatar user={item}/><span><b>{item.name}</b><small>{item.role}</small></span></div>)}</div></>}</section>}{tab==="discussion"&&(group.can_view_content?<><form className="card group-composer" onSubmit={publish}><h2>Create group post</h2><textarea value={post.content} onChange={e=>setPost({...post,content:e.target.value})} placeholder="Write something to the group..."/>{mediaFile&&<div className="file-chip">{mediaFile.name}</div>}<div><span className="group-compose-options">{group.allow_anonymous_posts&&<label><input type="checkbox" checked={post.is_anonymous} onChange={e=>setPost({...post,is_anonymous:e.target.checked})}/> Post anonymously</label>}<label className="secondary group-attach"><Paperclip size={17}/> Attach media/file<input hidden type="file" onChange={e=>setMediaFile(e.target.files?.[0]||null)}/></label></span><button className="primary">Post</button></div></form><section className="group-feed">{posts.length?posts.map(postCard):<div className="card empty">No group posts yet.</div>}</section></>:<div className="card empty"><h2>This is a private group</h2><p>Join the group to see its posts.</p></div>)}{tab==="featured"&&(group.can_view_content?<section className="group-feed">{posts.some(item=>item.is_pinned)?posts.filter(item=>item.is_pinned).map(postCard):<div className="card empty">No featured posts yet.</div>}</section>:<div className="card empty">Join the group to see featured posts.</div>)}{tab==="people"&&(group.membership_status==="member"?<section className="card group-people"><div className="section-head"><div><h2>People</h2><p>{group.member_count} members</p></div><div className="group-people-tools"><div className="group-member-search"><Search size={18}/><input value={memberQuery} onChange={e=>setMemberQuery(e.target.value)} placeholder="Search members..."/></div>{group.my_role==="admin"&&<button className="primary" onClick={()=>setAddMemberOpen(true)}><UserPlus size={18}/> Add member</button>}</div></div><div className="group-people-grid">
+{filteredMembers.map(item=><div className="group-person" key={item.id}><Avatar user={item}/><span><b>{item.name}</b><small>@{item.username} · {item.role}{item.posting_muted_until&&` · muted until ${formatDateTime(item.posting_muted_until)}`}</small></span>{group.my_role==="admin"&&item.id!==group.owner.id&&<div className="group-member-menu-wrap"><button className="icon-btn" onClick={()=>setMemberMenu(memberMenu===item.id?null:item.id)}><MoreHorizontal/></button>{memberMenu===item.id&&<div className="group-member-menu"><button onClick={()=>memberAction(item,"role:admin")}>Make admin</button><button onClick={()=>memberAction(item,"role:moderator")}>Make moderator</button><button onClick={()=>memberAction(item,"role:member")}>Make member</button><button onClick={()=>memberAction(item,"mute_day")}>Mute posting · 24 hours</button><button onClick={()=>memberAction(item,"mute_week")}>Mute posting · 7 days</button>{item.posting_muted_until&&<button onClick={()=>memberAction(item,"unmute")}>Restore posting</button>}<button className="danger-link" onClick={()=>memberAction(item,"kick")}>Remove from group</button><button className="danger-link" onClick={()=>memberAction(item,"ban")}>Ban permanently</button></div>}</div>}</div>)}
+</div></section>:<div className="card empty">Join the group to see members.</div>)}{tab==="media"&&(group.can_view_content?<section className="card group-library"><h2>Photos and videos</h2><div className="group-media-grid">{mediaPosts.map(item=>item.media_type==="video"?<video key={item.id} src={asset(item.media_url)} controls/>:<img key={item.id} src={asset(item.media_url)}/>)}{!mediaPosts.length&&<p>No photos or videos yet.</p>}</div></section>:<div className="card empty">Join the group to see media.</div>)}{tab==="files"&&(group.can_view_content?<section className="card group-library"><h2>Files</h2><div className="group-file-list">{filePosts.map(item=><a key={item.id} href={asset(item.media_url)} target="_blank" rel="noreferrer"><FileText/><span><b>{item.content||"Attached file"}</b><small>{formatDateTime(item.created_at)}</small></span><Download/></a>)}{!filePosts.length&&<p>No files have been shared.</p>}</div></section>:<div className="card empty">Join the group to see files.</div>)}</div>;
+}
+
+const RESERVED_PATHS=new Set(["settings","friends","messages","notifications","activity-log","groups"]);
 const currentPath=()=>decodeURIComponent(window.location.pathname.replace(/^\/+|\/+$/g,""));
 
 function RoutedApp(){
-  const[user,setUser]=useState(null),[view,setView]=useState("home"),[feed,setFeed]=useState([]),[profile,setProfile]=useState(null),[friends,setFriends]=useState([]),[requests,setRequests]=useState([]),[sentRequests,setSentRequests]=useState([]),[suggestions,setSuggestions]=useState([]),[target,setTarget]=useState(null),[conversations,setConversations]=useState([]),[notifs,setNotifs]=useState([]),[unread,setUnread]=useState(0),[messageUnread,setMessageUnread]=useState(0),[drop,setDrop]=useState(false),[accountDrop,setAccountDrop]=useState(false),[search,setSearch]=useState(""),[results,setResults]=useState([]),[routeError,setRouteError]=useState("");
+  const[user,setUser]=useState(null),[view,setView]=useState("home"),[feed,setFeed]=useState([]),[profile,setProfile]=useState(null),[friends,setFriends]=useState([]),[requests,setRequests]=useState([]),[sentRequests,setSentRequests]=useState([]),[suggestions,setSuggestions]=useState([]),[target,setTarget]=useState(null),[conversations,setConversations]=useState([]),[notifs,setNotifs]=useState([]),[unread,setUnread]=useState(0),[messageUnread,setMessageUnread]=useState(0),[drop,setDrop]=useState(false),[accountDrop,setAccountDrop]=useState(false),[search,setSearch]=useState(""),[results,setResults]=useState([]),[routeError,setRouteError]=useState(""),[groupId,setGroupId]=useState(null),[newGroupChatOpen,setNewGroupChatOpen]=useState(false),[draftGroupChat,setDraftGroupChat]=useState(null);
   const[theme,setTheme]=useState(()=>localStorage.getItem("socialn_theme")||"dark");
   const[language,setLanguage]=useState(()=>localStorage.getItem("socialn_language")||"vi");
   const[timezone,setTimezone]=useState(()=>localStorage.getItem("socialn_timezone")||"auto");
@@ -1073,7 +1185,7 @@ function RoutedApp(){
   }
 
   async function loadFeed(){try{const rows=await api("/api/posts");setFeed(Array.isArray(rows)?rows:[])}catch(e){console.error(e);setFeed([])}}
-  async function loadC(){try{const rows=await api("/api/chat/conversations");setConversations((Array.isArray(rows)?rows:[]).filter(c=>c?.user?.id))}catch(e){console.error(e);setConversations([])}}
+  async function loadC(){try{const rows=await api("/api/chat/conversations");setConversations((Array.isArray(rows)?rows:[]).filter(c=>c?.is_group||c?.user?.id))}catch(e){console.error(e);setConversations([])}}
   async function loadN(){try{const d=await api("/api/notifications");setNotifs(d.items||[]);setUnread(d.unread_count||0)}catch(e){console.error(e)}}
   async function loadMessageUnread(){try{const d=await api("/api/chat/unread-count");setMessageUnread(d.unread_count||0)}catch(e){console.error(e)}}
   async function refresh(){loadFeed();loadN();loadC();loadMessageUnread();try{const [f,r,sent,s]=await Promise.all([api("/api/friends"),api("/api/friends/requests"),api("/api/friends/requests/sent"),api("/api/users/suggestions/people")]);setFriends(f);setRequests(r);setSentRequests(sent);setSuggestions(s)}catch(e){console.error(e)}}
@@ -1087,18 +1199,22 @@ function RoutedApp(){
   async function reloadProfile(id){try{const d=await api(`/api/users/${id}/profile`);setProfile(d);setView("profile");refresh()}catch(e){setRouteError(e.message)}}
   function go(path,nextView){setRoute(path,nextView)}
   function message(u){setTarget(u);setRoute(`/messages/${encodeURIComponent(u.username)}`,"chat");loadC()}
+  function openGroupChat(c){setTarget({...c,id:c.group_chat_id,is_group:true});setRoute(`/messages/group/${c.group_chat_id}`,"chat");loadC()}
 
   async function resolvePath(replace=false){
     const path=currentPath();
     if(!path){setRoute("/","home",{replace});return}
-    const [head,second]=path.split("/");
+    const [head,second,third]=path.split("/");
     if(head==="settings"){setView("settings");return}
     if(head==="friends"){setView("friends");return}
     if(head==="notifications"){setView("notifications");return}
     if(head==="activity-log"){setView("activity");return}
+    if(head==="groups"){setGroupId(second?Number(second):null);setView("groups");return}
     if(head==="messages"){
       setView("chat");
-      if(second){try{const d=await api(`/api/users/username/${encodeURIComponent(second)}/profile`);setTarget(d.user)}catch(e){setRouteError(e.message)}}
+      if(second==="invite"&&third){try{const joined=await api(`/api/chat/group-invites/${encodeURIComponent(third)}`,{method:"POST"});if(joined.status==="pending"){setTarget(null);setRouteError("Your request was sent to the group admins for approval.")}else{const d=await api(`/api/chat/group-conversations/${joined.group_id}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true});setRoute(`/messages/group/${joined.group_id}`,"chat",{replace:true})}}catch(e){setRouteError(e.message)}}
+      else if(second==="group"&&third){try{const d=await api(`/api/chat/group-conversations/${Number(third)}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true})}catch(e){setRouteError(e.message)}}
+      else if(second&&second!=="new-group"){try{const d=await api(`/api/users/username/${encodeURIComponent(second)}/profile`);setTarget(d.user)}catch(e){setRouteError(e.message)}}
       return;
     }
     if(!RESERVED_PATHS.has(head))await openUsername(head,{replace:true});
@@ -1108,7 +1224,7 @@ function RoutedApp(){
   useEffect(()=>{if(!user)return;refresh();resolvePath(true);const onPop=()=>resolvePath(true);window.addEventListener("popstate",onPop);const w=new WebSocket(`${WS}/api/notifications/ws?token=${encodeURIComponent(tok())}`);w.onopen=()=>w.send("ready");w.onmessage=async event=>{loadN();loadMessageUnread();loadC();try{const payload=JSON.parse(event.data);if(["relationship_accepted","relationship_declined","relationship_unlinked"].includes(payload?.reason)){const updated=await api(`/api/users/${user.id}/profile`);setProfile(current=>Number(current?.user?.id)===Number(user.id)?updated:current);setUser(await api("/api/users/me"))}}catch{}};return()=>{window.removeEventListener("popstate",onPop);w.close()}},[user?.id]);
 
   function query(v){setSearch(v);clearTimeout(searchTimerRef.current);if(!v.trim()){setResults([]);return}searchTimerRef.current=setTimeout(async()=>{try{setResults(await api(`/api/users/search?q=${encodeURIComponent(v.trim())}`))}catch{setResults([])}},450)}
-  async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.type==="new_message"&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
+  async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.entity_type==="group"&&n.entity_id){setGroupId(n.entity_id);go(`/groups/${n.entity_id}`,"groups")}else if(n.entity_type==="chat_group"&&n.entity_id){try{const d=await api(`/api/chat/group-conversations/${n.entity_id}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true});go(`/messages/group/${n.entity_id}`,"chat")}catch(e){setRouteError(e.message)}}else if(n.type==="new_message"&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
   async function respondRelationship(n,action){try{await api(`/api/users/relationship-requests/${n.entity_id}/${action}`,{method:"POST"});await loadN();const updated=await api("/api/users/me");setUser(updated);if(view==="profile"&&Number(profile?.user?.id)===Number(user.id))await reloadProfile(user.id)}catch(e){alert(e.message)}}
   function logout(){localStorage.removeItem("socialn_token");window.history.replaceState({},"","/");setUser(null)}
   function toggleSidebar(){if(window.matchMedia("(max-width: 900px)").matches)setMobileSidebarOpen(value=>!value);else setSidebarCollapsed(value=>!value)}
@@ -1122,19 +1238,23 @@ function RoutedApp(){
         <div className="account-wrap"><button className="account-trigger" title="Account" aria-expanded={accountDrop} onClick={()=>{setAccountDrop(value=>!value);setDrop(false)}}><Avatar user={user} size={40}/><span className="account-caret">⌄</span></button>{accountDrop&&<div className="account-dropdown"><button className="account-profile" onClick={()=>openProfile(user.id)}><Avatar user={user} size={46}/><span><b>{user.name}</b><small>View your profile</small></span></button><div className="account-divider"/><button onClick={()=>go("/settings","settings")}><Settings size={20}/><span>Settings</span></button><button onClick={logout}><LogOut size={20}/><span>Log out</span></button></div>}</div>
       </div>
     </header>
-    <div className={`layout ${sidebarCollapsed?"sidebar-collapsed":""}`}>{mobileSidebarOpen&&<button className="sidebar-backdrop" aria-label="Close navigation menu" onClick={()=>setMobileSidebarOpen(false)}/>}<aside className={`sidebar ${mobileSidebarOpen?"open":""}`}><button className="side-user" title={user.name} onClick={()=>openProfile(user.id)}><Avatar user={user}/><b className="sidebar-label">{user.name}</b></button><button title="Home" onClick={()=>go("/","home")}><Home/><span className="sidebar-label">Home</span></button><button title="Profile" onClick={()=>openProfile(user.id)}><Users/><span className="sidebar-label">Profile</span></button><button title="Friends" onClick={()=>go("/friends","friends")}><UserCheck/><span className="sidebar-label">Friends</span>{requests.length>0&&<span className="side-badge">{requests.length}</span>}</button><button title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/><span className="sidebar-label">Messages</span></button><button title="Activity log" onClick={()=>go("/activity-log","activity")}><History/><span className="sidebar-label">Activity log</span></button><button title="Settings" onClick={()=>go("/settings","settings")}><Settings/><span className="sidebar-label">Settings</span></button></aside>
-      <main className={`main ${view==="chat"?"chat-main":view==="profile"?"profile-main":["home","friends","settings","activity","notifications"].includes(view)?"adaptive-main":""}`}>
+    <div className={`layout ${sidebarCollapsed?"sidebar-collapsed":""}`}>{mobileSidebarOpen&&<button className="sidebar-backdrop" aria-label="Close navigation menu" onClick={()=>setMobileSidebarOpen(false)}/>}<aside className={`sidebar ${mobileSidebarOpen?"open":""}`}><button className="side-user" title={user.name} onClick={()=>openProfile(user.id)}><Avatar user={user}/><b className="sidebar-label">{user.name}</b></button><button title="Home" onClick={()=>go("/","home")}><Home/><span className="sidebar-label">Home</span></button><button title="Friends" onClick={()=>go("/friends","friends")}><UserCheck/><span className="sidebar-label">Friends</span>{requests.length>0&&<span className="side-badge">{requests.length}</span>}</button><button title="Groups" onClick={()=>{setGroupId(null);go("/groups","groups")}}><UsersRound/><span className="sidebar-label">Groups</span></button><button title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/><span className="sidebar-label">Messages</span></button><button title="Activity log" onClick={()=>go("/activity-log","activity")}><History/><span className="sidebar-label">Activity log</span></button><button title="Settings" onClick={()=>go("/settings","settings")}><Settings/><span className="sidebar-label">Settings</span></button></aside>
+      <main className={`main ${view==="chat"?"chat-main":view==="profile"?"profile-main":["home","friends","settings","activity","notifications","groups"].includes(view)?"adaptive-main":""}`}>
         {routeError&&<div className="error">{routeError}</div>}
         {view==="home"&&<><PostComposer onCreated={p=>setFeed(v=>[p,...v])}/>{feed.length===0?<div className="card empty">No posts yet. Create the first post.</div>:feed.map(p=><PostCard key={p.id} post={p} me={user} onOpenProfile={openProfile} onUpdated={updated=>setFeed(v=>v.map(x=>x.id===updated.id?updated:x))} onDeleted={id=>setFeed(v=>v.filter(x=>x.id!==id))}/>)}</>}
         {view==="profile"&&profile&&<Profile data={profile} me={user} reload={reloadProfile} message={message} open={openProfile}/>}
         {view==="friends"&&<div className="friends-page"><div className="card friends-section"><div className="section-head"><h2>Friend requests</h2>{requests.length>0&&<span className="count-chip">{requests.length}</span>}</div>{requests.length===0&&<div className="muted">No pending requests.</div>}{requests.map(r=><div className="request-row" key={r.id}><Avatar user={r.user} onClick={()=>openProfile(r.user.id)}/><button className="name-block" onClick={()=>openProfile(r.user.id)}><b>{r.user.name}</b></button><button className="primary" onClick={async()=>{await api(`/api/friends/${r.id}/accept`,{method:"POST"});refresh()}}>Confirm</button><button className="secondary" onClick={async()=>{await api(`/api/friends/${r.id}/reject`,{method:"POST"});refresh()}}>Delete</button></div>)}</div><div className="card friends-section"><div className="section-head"><div><h2>Sent requests</h2><p className="muted small">Manage friend requests you have sent.</p></div>{sentRequests.length>0&&<span className="count-chip">{sentRequests.length}</span>}</div>{sentRequests.length===0?<div className="muted sent-empty">No sent requests.</div>:<div className="request-list">{sentRequests.map(r=><div className="request-row sent-request-row" key={r.id}><Avatar user={r.user} onClick={()=>openProfile(r.user.id)}/><button className="name-block" onClick={()=>openProfile(r.user.id)}><b>{r.user.name}</b><small className="muted">Sent {formatDateTime(r.created_at)}</small></button><button className="secondary cancel-request" onClick={async()=>{if(await confirmDialog({variant:"confirm",title:"Cancel friend request?",message:`Withdraw the friend request sent to ${r.user.name}?`,confirmLabel:"Withdraw",cancelLabel:"Keep request"})){await api(`/api/friends/requests/${r.id}`,{method:"DELETE"});refresh()}}}>Withdraw</button></div>)}</div>}</div><div className="card friends-section"><h2>Your friends</h2><div className="people-grid">{friends.map(u=><div className="person" key={u.id}><Avatar user={u} onClick={()=>openProfile(u.id)}/><button className="name-link" onClick={()=>openProfile(u.id)}>{u.name}</button><button className="secondary" onClick={()=>message(u)}>Message</button></div>)}</div></div><div className="card friends-section"><h2>People you may know</h2><div className="people-grid">{suggestions.map(u=><div className="person" key={u.id}><Avatar user={u} onClick={()=>openProfile(u.id)}/><button className="name-link" onClick={()=>openProfile(u.id)}>{u.name}</button><small>{u.mutual_friends_count} mutual friends</small><button className="primary" onClick={async()=>{await api(`/api/friends/${u.id}`,{method:"POST"});refresh()}}>Add friend</button></div>)}</div></div></div>}
-        {view==="chat"&&<div className="chat-layout"><div className="conversation-list card"><div className="conversation-title">Messages</div>
-          {conversations.filter(c=>Number(c.user.id)===Number(user.id)).map(c=><ConversationRow key={c.id} conversation={c} personalStorage active={Number(target?.id)===Number(user.id)} onOpen={()=>message(user)} onChanged={loadC} onDeleted={()=>{setTarget(null);setRoute("/messages","chat")}}/>)}
-          {!conversations.some(c=>Number(c.user.id)===Number(user.id))&&<button className="self-vault" onClick={()=>message(user)}><Avatar user={user}/><span><b>{user.name} (You)</b><small>Personal storage</small></span></button>}
-          {conversations.filter(c=>Number(c.user.id)!==Number(user.id)).map(c=><ConversationRow key={c.id} conversation={c} active={Number(target?.id)===Number(c.user.id)} onOpen={()=>message(c.user)} onChanged={loadC} onDeleted={c=>{if(Number(target?.id)===Number(c.user.id)){setTarget(null);setRoute("/messages","chat")}}}/>)}
-        </div><Chat me={user} target={target} open={openProfile} onChanged={()=>{loadC();loadMessageUnread()}}/></div>}
+        {view==="chat"&&<div className="chat-layout"><div className="conversation-list card"><div className="conversation-title"><span>Messages</span><button className="compose-message" title="Compose message" onClick={()=>setNewGroupChatOpen(true)}><Edit2 size={19}/></button></div>
+          {conversations.filter(c=>!c.is_group&&Number(c.user.id)===Number(user.id)).map(c=><ConversationRow key={c.id} conversation={c} personalStorage active={!target?.is_group&&Number(target?.id)===Number(user.id)} onOpen={()=>message(user)} onChanged={loadC} onDeleted={()=>{setTarget(null);setRoute("/messages","chat")}}/>)}
+          {!conversations.some(c=>!c.is_group&&Number(c.user.id)===Number(user.id))&&<button className="self-vault" onClick={()=>message(user)}><Avatar user={user}/><span><b>{user.name} (You)</b><small>Personal storage</small></span></button>}
+          {draftGroupChat&&<ConversationRow conversation={draftGroupChat} active={target?.is_group_draft} onOpen={()=>{setTarget(draftGroupChat);setRoute("/messages/new-group","chat")}}/>}
+          {conversations.filter(c=>c.is_group||Number(c.user?.id)!==Number(user.id)).map(c=>c.is_group
+            ?<ConversationRow key={`group-${c.group_chat_id}`} conversation={c} active={target?.is_group&&Number(target?.group_chat_id)===Number(c.group_chat_id)} onOpen={()=>openGroupChat(c)} onChanged={loadC}/>
+            :<ConversationRow key={c.id} conversation={c} active={!target?.is_group&&Number(target?.id)===Number(c.user.id)} onOpen={()=>message(c.user)} onChanged={loadC} onDeleted={row=>{if(Number(target?.id)===Number(row.user.id)){setTarget(null);setRoute("/messages","chat")}}}/>)}
+        </div><Chat me={user} target={target} open={openProfile} onChanged={()=>{loadC();loadMessageUnread()}} onGroupActivated={group=>{setDraftGroupChat(null);setTarget({...group,is_group:true});setRoute(`/messages/group/${group.group_chat_id}`,"chat");loadC()}}/>{newGroupChatOpen&&<NewGroupChatModal friends={friends} onClose={()=>setNewGroupChatOpen(false)} onCreate={draft=>{const item={...draft,id:"draft",group_chat_id:"draft",last_message:"Draft · Send a message to create",last_message_type:"text"};setDraftGroupChat(item);setTarget(item);setNewGroupChatOpen(false);setRoute("/messages/new-group","chat")}}/>}</div>}
         {view==="notifications"&&<div className="card notifications-page">{notifs.map(n=><button className="notification-row" key={n.id} onClick={()=>read(n)}>{n.message}</button>)}</div>}
-        {view==="activity"&&<ActivityLogPage openProfile={openProfile}/>}
+        {view==="activity"&&<ActivityLogPage openProfile={openProfile}/>} 
+        {view==="groups"&&<GroupsPage groupId={groupId} onOpen={id=>{setGroupId(id);go(`/groups/${id}`,"groups")}}/>}
         {view==="settings"&&<SettingsPage user={user} onUserUpdated={setUser} theme={theme} onThemeChange={setTheme} language={language} onLanguageChange={setLanguage} timezone={timezone} onTimezoneChange={changeTimezone}/>}
         {view==="not_found"&&<div className="card empty"><h2>Page not found</h2><button className="primary" onClick={()=>go("/","home")}>Go home</button></div>}
       </main>

@@ -79,6 +79,28 @@ class MessageCreate(BaseModel):
     reply_to_id: Optional[int] = None
 
 
+class ChatGroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    member_ids: list[int] = Field(default_factory=list, min_length=1, max_length=100)
+    require_admin_approval: bool = False
+    first_message: MessageCreate
+
+
+class ChatGroupUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    require_admin_approval: bool = False
+    avatar_url: Optional[str] = Field(default=None, max_length=500)
+    theme: str = Field(default="default", max_length=40)
+    quick_reaction: str = Field(default="👍", max_length=20)
+    invite_enabled: bool = True
+    member_customization: bool = False
+
+
+class ChatPollCreate(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    options: list[str] = Field(min_length=2, max_length=10)
+
+
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)
@@ -96,3 +118,49 @@ class AlbumCreate(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     description: Optional[str] = Field(default=None, max_length=2000)
     privacy: str = "friends"
+
+
+class GroupCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=150)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    rules: Optional[str] = Field(default=None, max_length=10000)
+    privacy: str = "public"
+    visibility: str = "visible"
+    group_type: str = "general"
+    cover_url: Optional[str] = Field(default=None, max_length=500)
+    approval_questions: list[str] = Field(default_factory=list, max_length=3)
+
+
+class GroupJoinIn(BaseModel):
+    answers: list[str] = Field(default_factory=list, max_length=3)
+
+
+class GroupPostCreate(BaseModel):
+    content: str = Field(default="", max_length=10000)
+    media_url: Optional[str] = Field(default=None, max_length=500)
+    media_type: str = "image"
+    is_anonymous: bool = False
+
+
+class GroupUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=150)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    rules: Optional[str] = Field(default=None, max_length=10000)
+    privacy: str = "public"
+    visibility: str = "visible"
+    cover_url: Optional[str] = Field(default=None, max_length=500)
+    approval_questions: list[str] = Field(default_factory=list, max_length=3)
+    allow_anonymous_posts: bool = True
+    require_post_approval: bool = False
+
+
+class GroupCoverUpdate(BaseModel):
+    cover_url: str = Field(min_length=1, max_length=500)
+
+
+class GroupCommentCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class GroupReportCreate(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)

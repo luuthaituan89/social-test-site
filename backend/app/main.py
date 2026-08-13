@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine
 from .config import settings
-from .routes import auth, users, friends, posts, chat, upload, notifications, albums, giphy, activity
+from .routes import auth, users, friends, posts, chat, upload, notifications, albums, giphy, activity, groups
 
 Base.metadata.create_all(bind=engine)
 
@@ -40,6 +40,21 @@ def ensure_profile_columns():
         "ALTER TABLE posts ADD COLUMN album_id INT NULL",
         "ALTER TABLE posts ADD COLUMN sticker VARCHAR(100) NULL",
         "ALTER TABLE posts MODIFY COLUMN sticker TEXT NULL",
+        "ALTER TABLE `groups` ADD COLUMN rules TEXT NULL",
+        "ALTER TABLE `group_posts` ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE `groups` ADD COLUMN allow_anonymous_posts BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE `groups` ADD COLUMN require_post_approval BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE group_members ADD COLUMN posting_muted_until DATETIME NULL",
+        "ALTER TABLE group_members ADD COLUMN notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE chat_groups ADD COLUMN theme VARCHAR(40) NOT NULL DEFAULT 'default'",
+        "ALTER TABLE chat_groups ADD COLUMN quick_reaction VARCHAR(20) NOT NULL DEFAULT '👍'",
+        "ALTER TABLE chat_groups ADD COLUMN invite_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE chat_groups ADD COLUMN invite_token VARCHAR(80) NULL",
+        "ALTER TABLE chat_groups ADD COLUMN member_customization BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE chat_group_members ADD COLUMN nickname VARCHAR(120) NULL",
+        "ALTER TABLE chat_group_members ADD COLUMN muted_until DATETIME NULL",
+        "ALTER TABLE chat_group_members ADD COLUMN notification_sound VARCHAR(40) NOT NULL DEFAULT 'default'",
+        "ALTER TABLE chat_group_members ADD COLUMN last_read_at DATETIME NULL",
     ]
     with engine.begin() as conn:
         for statement in statements:
@@ -79,6 +94,7 @@ app.include_router(notifications.router)
 app.include_router(albums.router)
 app.include_router(giphy.router)
 app.include_router(activity.router)
+app.include_router(groups.router)
 
 
 @app.get("/health")

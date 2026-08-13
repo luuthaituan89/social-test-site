@@ -5,13 +5,14 @@ from jose import jwt, JWTError
 from pathlib import Path
 import uuid
 import json
+import re
 from urllib.parse import urlparse
 
 from ..database import get_db, SessionLocal
-from ..models import User, Conversation, Message, MessageReaction, Block
+from ..models import User, Conversation, Message, MessageReaction, Block, ChatGroup, ChatGroupMember, ChatGroupJoinRequest, ChatPoll, ChatPollOption, ChatPollVote
 from ..auth import get_current_user
 from ..config import settings
-from ..schemas import MessageCreate, ReactionIn
+from ..schemas import MessageCreate, ReactionIn, ChatGroupCreate, ChatGroupUpdate, ChatPollCreate
 from ..notifications import create_notification
 from .notifications import notification_ws
 
@@ -90,7 +91,7 @@ def message_preview(db: Session, message_id: int | None) -> dict | None:
 
 
 def serialize_message(msg: Message, other_user_id: int, db: Session | None = None) -> dict:
-    return {
+    result = {
         "type": "message",
         "id": msg.id,
         "conversation_id": msg.conversation_id,
@@ -111,6 +112,18 @@ def serialize_message(msg: Message, other_user_id: int, db: Session | None = Non
         "is_unsent": msg.is_unsent,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
     }
+    if db and msg.message_type == "poll" and msg.attachment_name:
+        try:
+            poll = db.get(ChatPoll, int(msg.attachment_name))
+            if poll:
+                options = db.query(ChatPollOption).filter(ChatPollOption.poll_id == poll.id).all()
+                votes = db.query(ChatPollVote).filter(ChatPollVote.poll_id == poll.id).all()
+                result["poll"] = {"id": poll.id, "question": poll.question,
+                    "options": [{"id": option.id, "label": option.label,
+                                 "votes": sum(1 for vote in votes if vote.option_id == option.id)} for option in options]}
+        except (TypeError, ValueError):
+            pass
+    return result
 
 
 def conversation_state(conv: Conversation, user_id: int):
@@ -135,6 +148,276 @@ def message_reaction_state(db: Session, message_id: int, viewer_id: int):
         counts[row.reaction] = counts.get(row.reaction, 0) + 1
         if row.user_id == viewer_id: mine = row.reaction
     return counts, mine
+
+
+def chat_group_members(db: Session, group_id: int):
+    rows = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group_id).all()
+    result = []
+    for row in rows:
+        member = db.get(User, row.user_id)
+        if member:
+            result.append({"id": member.id, "name": member.name, "username": member.username,
+                           "avatar_url": member.avatar_url, "role": row.role, "nickname": row.nickname})
+    return result
+
+
+def serialize_chat_group(db: Session, group: ChatGroup, membership: ChatGroupMember):
+    requests = []
+    if membership.role == "admin":
+        for request in db.query(ChatGroupJoinRequest).filter(ChatGroupJoinRequest.chat_group_id == group.id, ChatGroupJoinRequest.status == "pending").all():
+            candidate = db.get(User, request.user_id)
+            if candidate: requests.append({"id": request.id, "user": {"id": candidate.id, "name": candidate.name, "username": candidate.username, "avatar_url": candidate.avatar_url}})
+    return {"id": group.id, "name": group.name, "avatar_url": group.avatar_url, "creator_id": group.creator_id,
+            "require_admin_approval": group.require_admin_approval, "theme": group.theme,
+            "quick_reaction": group.quick_reaction, "invite_enabled": group.invite_enabled,
+            "invite_token": group.invite_token if group.invite_enabled else None,
+            "member_customization": group.member_customization,
+            "members": chat_group_members(db, group.id), "my_role": membership.role,
+            "muted_until": membership.muted_until, "notification_sound": membership.notification_sound,
+            "join_requests": requests}
+
+
+def require_chat_group_member(db: Session, group_id: int, user_id: int):
+    group = db.get(ChatGroup, group_id)
+    membership = db.query(ChatGroupMember).filter(
+        ChatGroupMember.chat_group_id == group_id, ChatGroupMember.user_id == user_id
+    ).first()
+    if not group or not membership:
+        raise HTTPException(404, "Group chat not found")
+    return group, membership
+
+
+def conversation_participant_ids(db: Session, conv: Conversation):
+    group = db.query(ChatGroup).filter(ChatGroup.conversation_id == conv.id).first()
+    if group:
+        return [row.user_id for row in db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id).all()]
+    return list({conv.user_a_id, conv.user_b_id})
+
+
+def validate_message(data: MessageCreate):
+    content = data.content.strip()
+    if data.message_type not in {"text", "image", "video", "file", "voice", "sticker", "gif"}:
+        raise HTTPException(400, "Invalid message type")
+    if not content and not data.attachment_url and not data.sticker:
+        raise HTTPException(400, "Message cannot be empty")
+    if data.message_type not in {"text", "sticker"} and not data.attachment_url:
+        raise HTTPException(400, "Attachment is required")
+    return content
+
+
+async def notify_group_message(db: Session, group: ChatGroup, sender: User, msg: Message):
+    from datetime import datetime
+    payload = {**serialize_message(msg, 0, db), "group_chat_id": group.id,
+               "reaction_counts": {}, "my_reaction": None}
+    memberships = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id).all()
+    mention_tokens = {value.lower() for value in re.findall(r"(?<!\w)@([A-Za-z0-9_]+)", msg.content or "")}
+    for membership in memberships:
+        member_id = membership.user_id
+        await manager.send_user(member_id, payload)
+        muted = membership.muted_until and membership.muted_until > datetime.utcnow()
+        if member_id != sender.id and not muted:
+            member = db.get(User, member_id)
+            mentioned = "all" in mention_tokens or bool(member and member.username.lower() in mention_tokens)
+            create_notification(db, user_id=member_id, actor_id=sender.id,
+                                type="group_mention" if mentioned else "new_message",
+                                message=f"{sender.name} mentioned you in {group.name}" if mentioned else f"{sender.name} sent a message in {group.name}",
+                                entity_type="chat_group", entity_id=group.id)
+    return payload
+
+
+@router.post("/group-conversations")
+async def create_group_conversation(data: ChatGroupCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    content = validate_message(data.first_message)
+    member_ids = list(dict.fromkeys([int(x) for x in data.member_ids if int(x) != user.id]))
+    if not member_ids:
+        raise HTTPException(400, "Select at least one other member")
+    users = db.query(User).filter(User.id.in_(member_ids)).all()
+    if len(users) != len(member_ids):
+        raise HTTPException(400, "One or more selected users no longer exist")
+    conv = Conversation(user_a_id=user.id, user_b_id=user.id)
+    db.add(conv); db.flush()
+    group = ChatGroup(conversation_id=conv.id, name=data.name.strip(), creator_id=user.id,
+                      require_admin_approval=data.require_admin_approval)
+    db.add(group); db.flush()
+    db.add(ChatGroupMember(chat_group_id=group.id, user_id=user.id, role="admin"))
+    for member_id in member_ids:
+        db.add(ChatGroupMember(chat_group_id=group.id, user_id=member_id, role="member"))
+    first = data.first_message
+    msg = Message(conversation_id=conv.id, sender_id=user.id, content=content,
+                  message_type=first.message_type, attachment_url=first.attachment_url,
+                  attachment_name=first.attachment_name, attachment_mime=first.attachment_mime,
+                  sticker=first.sticker, is_read=False)
+    db.add(msg); db.flush()
+    payload = await notify_group_message(db, group, user, msg)
+    db.commit(); db.refresh(group); db.refresh(msg)
+    for member_id in member_ids:
+        await notification_ws.send(member_id, {"type": "notification_refresh", "reason": "new_group_message"})
+    creator_membership = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.user_id == user.id).first()
+    return {"group": {**serialize_chat_group(db, group, creator_membership), "is_group": True}, "message": payload}
+
+
+@router.get("/group-conversations/{group_id}/messages")
+def group_messages(group_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    from datetime import datetime
+    group, membership = require_chat_group_member(db, group_id, user.id)
+    rows = db.query(Message).filter(Message.conversation_id == group.conversation_id).order_by(Message.created_at, Message.id).limit(500).all()
+    membership.last_read_at = datetime.utcnow()
+    db.commit()
+    result = []
+    for msg in rows:
+        counts, mine = message_reaction_state(db, msg.id, user.id)
+        result.append({**serialize_message(msg, 0, db), "group_chat_id": group.id,
+                       "reaction_counts": counts, "my_reaction": mine})
+    return {"group": serialize_chat_group(db, group, membership), "messages": result}
+
+
+@router.post("/group-conversations/{group_id}/messages")
+async def send_group_message(group_id: int, data: MessageCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group, _ = require_chat_group_member(db, group_id, user.id)
+    content = validate_message(data)
+    reply = db.get(Message, data.reply_to_id) if data.reply_to_id else None
+    if reply and reply.conversation_id != group.conversation_id:
+        raise HTTPException(400, "Reply target is not in this group chat")
+    msg = Message(conversation_id=group.conversation_id, sender_id=user.id, content=content,
+                  message_type=data.message_type, attachment_url=data.attachment_url,
+                  attachment_name=data.attachment_name, attachment_mime=data.attachment_mime,
+                  sticker=data.sticker, reply_to_id=reply.id if reply else None, is_read=False)
+    db.add(msg); db.flush()
+    payload = await notify_group_message(db, group, user, msg)
+    db.commit(); db.refresh(msg)
+    return payload
+
+
+@router.post("/group-conversations/{group_id}/polls")
+async def create_group_poll(group_id: int, data: ChatPollCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group, _ = require_chat_group_member(db, group_id, user.id)
+    labels = [value.strip() for value in data.options if value.strip()]
+    if len(labels) < 2: raise HTTPException(400, "A poll needs at least two options")
+    poll = ChatPoll(chat_group_id=group.id, creator_id=user.id, question=data.question.strip())
+    db.add(poll); db.flush()
+    for label in labels: db.add(ChatPollOption(poll_id=poll.id, label=label))
+    db.flush()
+    msg = Message(conversation_id=group.conversation_id, sender_id=user.id, content="",
+                  message_type="poll", attachment_name=str(poll.id), is_read=False)
+    db.add(msg); db.flush()
+    payload = await notify_group_message(db, group, user, msg)
+    db.commit()
+    return payload
+
+
+@router.post("/polls/{poll_id}/vote/{option_id}")
+async def vote_group_poll(poll_id: int, option_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    poll = db.get(ChatPoll, poll_id)
+    if not poll: raise HTTPException(404, "Poll not found")
+    group, _ = require_chat_group_member(db, poll.chat_group_id, user.id)
+    option = db.get(ChatPollOption, option_id)
+    if not option or option.poll_id != poll.id: raise HTTPException(404, "Poll option not found")
+    vote = db.query(ChatPollVote).filter(ChatPollVote.poll_id == poll.id, ChatPollVote.user_id == user.id).first()
+    if vote: vote.option_id = option.id
+    else: db.add(ChatPollVote(poll_id=poll.id, option_id=option.id, user_id=user.id))
+    db.commit()
+    message = db.query(Message).filter(Message.conversation_id == group.conversation_id,
+                                       Message.message_type == "poll", Message.attachment_name == str(poll.id)).first()
+    payload = serialize_message(message, 0, db) if message else {"poll": {"id": poll.id}}
+    for participant_id in conversation_participant_ids(db, db.get(Conversation, group.conversation_id)):
+        await manager.send_user(participant_id, {"type": "poll_updated", "message": payload})
+    return payload
+
+
+@router.put("/group-conversations/{group_id}")
+def update_group_conversation(group_id: int, data: ChatGroupUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group, membership = require_chat_group_member(db, group_id, user.id)
+    if membership.role != "admin": raise HTTPException(403, "Admin access required")
+    group.name = data.name.strip(); group.require_admin_approval = data.require_admin_approval
+    group.avatar_url = data.avatar_url; group.theme = data.theme; group.quick_reaction = data.quick_reaction
+    group.invite_enabled = data.invite_enabled; group.member_customization = data.member_customization
+    if group.invite_enabled and not group.invite_token: group.invite_token = uuid.uuid4().hex
+    db.commit(); db.refresh(group)
+    return {"message": "Group chat updated", "group": serialize_chat_group(db, group, membership)}
+
+
+@router.put("/group-conversations/{group_id}/members/{member_id}/nickname")
+def update_group_nickname(group_id: int, member_id: int, nickname: str = "", db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group, membership = require_chat_group_member(db, group_id, user.id)
+    if membership.role != "admin" and not group.member_customization:
+        raise HTTPException(403, "Only admins can change nicknames")
+    target = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.user_id == member_id).first()
+    if not target: raise HTTPException(404, "Member not found")
+    target.nickname = nickname.strip()[:120] or None; db.commit()
+    return {"message": "Nickname updated"}
+
+
+@router.put("/group-conversations/{group_id}/preferences")
+def update_group_preferences(group_id: int, mute_minutes: int = 0, sound: str = "default", db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    from datetime import datetime, timedelta
+    _, membership = require_chat_group_member(db, group_id, user.id)
+    if mute_minutes < 0: membership.muted_until = datetime(9999, 12, 31)
+    elif mute_minutes == 0: membership.muted_until = None
+    else: membership.muted_until = datetime.utcnow() + timedelta(minutes=min(mute_minutes, 525600))
+    membership.notification_sound = sound[:40] if sound else "default"; db.commit()
+    return {"muted_until": membership.muted_until, "notification_sound": membership.notification_sound}
+
+
+@router.post("/group-invites/{token}")
+def join_group_chat_by_link(token: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group = db.query(ChatGroup).filter(ChatGroup.invite_token == token, ChatGroup.invite_enabled == True).first()
+    if not group: raise HTTPException(404, "Invitation link is invalid or disabled")
+    existing = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.user_id == user.id).first()
+    if existing: return {"status": "joined", "group_id": group.id}
+    if group.require_admin_approval:
+        request = db.query(ChatGroupJoinRequest).filter(ChatGroupJoinRequest.chat_group_id == group.id, ChatGroupJoinRequest.user_id == user.id).first()
+        if request: request.status = "pending"
+        else: db.add(ChatGroupJoinRequest(chat_group_id=group.id, user_id=user.id, status="pending"))
+        db.commit(); return {"status": "pending", "group_id": group.id}
+    db.add(ChatGroupMember(chat_group_id=group.id, user_id=user.id, role="member")); db.commit()
+    return {"status": "joined", "group_id": group.id}
+
+
+@router.post("/group-conversations/{group_id}/join-requests/{request_id}/{action}")
+def review_group_chat_request(group_id: int, request_id: int, action: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group, membership = require_chat_group_member(db, group_id, user.id)
+    if membership.role != "admin": raise HTTPException(403, "Admin access required")
+    if action not in {"approve", "decline"}: raise HTTPException(400, "Invalid action")
+    request = db.get(ChatGroupJoinRequest, request_id)
+    if not request or request.chat_group_id != group.id or request.status != "pending": raise HTTPException(404, "Request not found")
+    request.status = "approved" if action == "approve" else "declined"
+    if action == "approve" and not db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.user_id == request.user_id).first():
+        db.add(ChatGroupMember(chat_group_id=group.id, user_id=request.user_id, role="member"))
+    db.commit(); return {"message": f"Request {action}d"}
+
+
+@router.post("/group-conversations/{group_id}/members/{member_id}")
+def add_group_chat_member(group_id: int, member_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group, membership = require_chat_group_member(db, group_id, user.id)
+    if membership.role != "admin": raise HTTPException(403, "Admin access required")
+    if not db.get(User, member_id): raise HTTPException(404, "User not found")
+    if db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.user_id == member_id).first():
+        raise HTTPException(409, "User is already a member")
+    db.add(ChatGroupMember(chat_group_id=group.id, user_id=member_id, role="member")); db.commit()
+    return {"message": "Member added"}
+
+
+@router.delete("/group-conversations/{group_id}/members/{member_id}")
+def remove_group_chat_member(group_id: int, member_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group, membership = require_chat_group_member(db, group_id, user.id)
+    if membership.role != "admin" and member_id != user.id: raise HTTPException(403, "Admin access required")
+    target = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.user_id == member_id).first()
+    if not target: raise HTTPException(404, "Member not found")
+    admins = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.role == "admin").count()
+    if target.role == "admin" and admins == 1: raise HTTPException(400, "Assign another admin before leaving")
+    db.delete(target); db.commit()
+    return {"message": "Member removed"}
+
+
+@router.put("/group-conversations/{group_id}/members/{member_id}/role")
+def set_group_chat_role(group_id: int, member_id: int, role: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group, membership = require_chat_group_member(db, group_id, user.id)
+    if membership.role != "admin": raise HTTPException(403, "Admin access required")
+    if role not in {"admin", "member"}: raise HTTPException(400, "Invalid role")
+    target = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.user_id == member_id).first()
+    if not target: raise HTTPException(404, "Member not found")
+    target.role = role; db.commit()
+    return {"message": "Role updated"}
 
 
 @router.post("/upload")
@@ -175,11 +458,13 @@ def conversations(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    group_conversation_ids = [row[0] for row in db.query(ChatGroup.conversation_id).all()]
     rows = db.query(Conversation).filter(
         or_(
             Conversation.user_a_id == user.id,
             Conversation.user_b_id == user.id,
-        )
+        ),
+        ~Conversation.id.in_(group_conversation_ids) if group_conversation_ids else True,
     ).all()
 
     result = []
@@ -201,6 +486,9 @@ def conversations(
         if state["cleared_at"] and not last:
             continue
 
+        unread_query = db.query(Message).filter(Message.conversation_id == conv.id,
+                                                Message.sender_id != user.id, Message.is_read == False)
+        if state["cleared_at"]: unread_query = unread_query.filter(Message.created_at > state["cleared_at"])
         result.append({
             "id": conv.id,
             "user": {
@@ -214,15 +502,38 @@ def conversations(
             "last_at": last.created_at if last else conv.created_at,
             "pinned": state["pinned"],
             "archived": state["archived"],
+            "unread_count": unread_query.count(),
         })
 
+    memberships = db.query(ChatGroupMember).filter(ChatGroupMember.user_id == user.id).all()
+    for membership in memberships:
+        group = db.get(ChatGroup, membership.chat_group_id)
+        if not group: continue
+        last = db.query(Message).filter(Message.conversation_id == group.conversation_id).order_by(Message.created_at.desc(), Message.id.desc()).first()
+        unread_query = db.query(Message).filter(Message.conversation_id == group.conversation_id, Message.sender_id != user.id)
+        if membership.last_read_at: unread_query = unread_query.filter(Message.created_at > membership.last_read_at)
+        result.append({
+            "id": group.conversation_id, "group_chat_id": group.id, "is_group": True,
+            "name": group.name, "avatar_url": group.avatar_url,
+            "members": chat_group_members(db, group.id), "my_role": membership.role,
+            "require_admin_approval": group.require_admin_approval,
+            "theme": group.theme, "quick_reaction": group.quick_reaction,
+            "invite_enabled": group.invite_enabled, "invite_token": group.invite_token,
+            "member_customization": group.member_customization,
+            "muted_until": membership.muted_until, "notification_sound": membership.notification_sound,
+            "last_message": last.content if last else "", "last_message_type": last.message_type if last else None,
+            "last_at": last.created_at if last else group.created_at, "pinned": False, "archived": False,
+            "unread_count": unread_query.count(),
+        })
     return sorted(result, key=lambda x: (not x["pinned"], -x["last_at"].timestamp()))
 
 
 @router.get("/unread-count")
 def unread_message_count(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    group_conversation_ids = [row[0] for row in db.query(ChatGroup.conversation_id).all()]
     rows = db.query(Conversation).filter(
-        or_(Conversation.user_a_id == user.id, Conversation.user_b_id == user.id)
+        or_(Conversation.user_a_id == user.id, Conversation.user_b_id == user.id),
+        ~Conversation.id.in_(group_conversation_ids) if group_conversation_ids else True,
     ).all()
     total = 0
     for conv in rows:
@@ -235,6 +546,13 @@ def unread_message_count(db: Session = Depends(get_db), user: User = Depends(get
         if state["cleared_at"]:
             query = query.filter(Message.created_at > state["cleared_at"])
         total += query.count()
+    memberships = db.query(ChatGroupMember).filter(ChatGroupMember.user_id == user.id).all()
+    for membership in memberships:
+        group = db.get(ChatGroup, membership.chat_group_id)
+        if group:
+            query = db.query(Message).filter(Message.conversation_id == group.conversation_id, Message.sender_id != user.id)
+            if membership.last_read_at: query = query.filter(Message.created_at > membership.last_read_at)
+            total += query.count()
     return {"unread_count": total}
 
 
@@ -258,7 +576,7 @@ async def react_to_message(message_id: int, data: ReactionIn, db: Session = Depe
         raise HTTPException(400, "Invalid reaction")
     msg = db.get(Message, message_id)
     conv = db.get(Conversation, msg.conversation_id) if msg else None
-    if not msg or not conv or user.id not in (conv.user_a_id, conv.user_b_id):
+    if not msg or not conv or user.id not in conversation_participant_ids(db, conv):
         raise HTTPException(404, "Message not found")
     row = db.query(MessageReaction).filter(MessageReaction.message_id == message_id, MessageReaction.user_id == user.id).first()
     current = None
@@ -269,7 +587,8 @@ async def react_to_message(message_id: int, data: ReactionIn, db: Session = Depe
             row.reaction = data.reaction; current = data.reaction
     else:
         db.add(MessageReaction(message_id=message_id, user_id=user.id, reaction=data.reaction)); current = data.reaction
-    other_id = conv.user_b_id if conv.user_a_id == user.id else conv.user_a_id
+    participant_ids = conversation_participant_ids(db, conv)
+    other_id = next((x for x in participant_ids if x != user.id), user.id)
     if current and msg.sender_id != user.id:
         create_notification(db, user_id=msg.sender_id, actor_id=user.id, type="message_reaction",
                             message=f"{user.name} reacted {REACTIONS[current]} to your message",
@@ -278,9 +597,8 @@ async def react_to_message(message_id: int, data: ReactionIn, db: Session = Depe
     counts, mine = message_reaction_state(db, message_id, user.id)
     payload = {"type": "message_reaction", "message_id": message_id, "reaction_counts": counts,
                "reacting_user_id": user.id, "reaction": current}
-    await manager.send_user(user.id, payload)
-    if other_id != user.id:
-        await manager.send_user(other_id, payload)
+    for participant_id in participant_ids:
+        await manager.send_user(participant_id, payload)
     if current and msg.sender_id != user.id:
         await notification_ws.send(msg.sender_id, {"type": "notification_refresh", "reason": "message_reaction"})
     return {**payload, "my_reaction": mine}
@@ -478,7 +796,7 @@ async def send_message(
 def owned_chat_message(db: Session, message_id: int, user_id: int):
     msg = db.get(Message, message_id)
     conv = db.get(Conversation, msg.conversation_id) if msg else None
-    if not msg or not conv or user_id not in (conv.user_a_id, conv.user_b_id):
+    if not msg or not conv or user_id not in conversation_participant_ids(db, conv):
         raise HTTPException(404, "Message not found")
     return msg, conv
 
@@ -491,9 +809,8 @@ async def toggle_message_pin(message_id: int, db: Session = Depends(get_db), use
     msg.is_pinned = not msg.is_pinned
     db.commit()
     payload = {"type": "message_updated", "message_id": msg.id, "is_pinned": msg.is_pinned}
-    await manager.send_user(conv.user_a_id, payload)
-    if conv.user_b_id != conv.user_a_id:
-        await manager.send_user(conv.user_b_id, payload)
+    for participant_id in conversation_participant_ids(db, conv):
+        await manager.send_user(participant_id, payload)
     return payload
 
 
@@ -512,9 +829,8 @@ async def unsend_message(message_id: int, db: Session = Depends(get_db), user: U
     db.query(MessageReaction).filter(MessageReaction.message_id == msg.id).delete(synchronize_session=False)
     db.commit()
     payload = {"type": "message_updated", "message_id": msg.id, "is_unsent": True, "is_pinned": False}
-    await manager.send_user(conv.user_a_id, payload)
-    if conv.user_b_id != conv.user_a_id:
-        await manager.send_user(conv.user_b_id, payload)
+    for participant_id in conversation_participant_ids(db, conv):
+        await manager.send_user(participant_id, payload)
     return payload
 
 
