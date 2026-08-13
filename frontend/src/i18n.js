@@ -15,10 +15,27 @@ th:["เข้าสู่ระบบ","สมัครสมาชิก","ส
 
 const dictionaries={en:Object.fromEntries(en.map(x=>[x,x]))};
 for(const [locale,values] of Object.entries(rows))dictionaries[locale]=Object.fromEntries(en.map((key,index)=>[key,values[index]||key]));
+const extras={
+  en:{"Sent requests":"Sent requests","Manage friend requests you have sent.":"Manage friend requests you have sent.","No sent requests.":"No sent requests.","Sent":"Sent","Withdraw":"Withdraw","Cancel friend request?":"Cancel friend request?","Withdraw the friend request sent to {name}?":"Withdraw the friend request sent to {name}?","Keep request":"Keep request"},
+  vi:{"Sent requests":"Lời mời đã gửi","Manage friend requests you have sent.":"Quản lý các lời mời kết bạn bạn đã gửi.","No sent requests.":"Chưa có lời mời nào đã gửi.","Sent":"Đã gửi","Withdraw":"Thu hồi","Cancel friend request?":"Thu hồi lời mời kết bạn?","Withdraw the friend request sent to {name}?":"Thu hồi lời mời kết bạn đã gửi tới {name}?","Keep request":"Giữ lời mời"},
+  ko:{"Sent requests":"보낸 친구 요청","Manage friend requests you have sent.":"보낸 친구 요청을 관리합니다.","No sent requests.":"보낸 친구 요청이 없습니다.","Sent":"보냄","Withdraw":"요청 취소","Cancel friend request?":"친구 요청을 취소할까요?","Withdraw the friend request sent to {name}?":"{name}님에게 보낸 친구 요청을 취소할까요?","Keep request":"요청 유지"},
+  ja:{"Sent requests":"送信済みリクエスト","Manage friend requests you have sent.":"送信した友達リクエストを管理します。","No sent requests.":"送信済みのリクエストはありません。","Sent":"送信日時","Withdraw":"取り消す","Cancel friend request?":"友達リクエストを取り消しますか？","Withdraw the friend request sent to {name}?":"{name}さんへの友達リクエストを取り消しますか？","Keep request":"リクエストを保持"},
+  zh:{"Sent requests":"已发送的好友请求","Manage friend requests you have sent.":"管理你已发送的好友请求。","No sent requests.":"暂无已发送的请求。","Sent":"发送于","Withdraw":"撤回","Cancel friend request?":"撤回好友请求？","Withdraw the friend request sent to {name}?":"撤回发送给 {name} 的好友请求？","Keep request":"保留请求"},
+  th:{"Sent requests":"คำขอที่ส่งแล้ว","Manage friend requests you have sent.":"จัดการคำขอเป็นเพื่อนที่คุณส่งแล้ว","No sent requests.":"ไม่มีคำขอที่ส่งแล้ว","Sent":"ส่งเมื่อ","Withdraw":"ถอนคำขอ","Cancel friend request?":"ถอนคำขอเป็นเพื่อนหรือไม่?","Withdraw the friend request sent to {name}?":"ถอนคำขอเป็นเพื่อนที่ส่งถึง {name} หรือไม่?","Keep request":"เก็บคำขอไว้"}
+};
+for(const [locale,values] of Object.entries(extras))Object.assign(dictionaries[locale],values);
 let current="en",observer=null,applying=false;
 const textState=new WeakMap(),attrState=new WeakMap();
 const ignored=".post-content,.comment-body,.bubble,.profile-bio,.shared-content,.notification-content,.album-card small,.album-modal-title p";
-function translated(value){const trimmed=value.trim(),hit=dictionaries[current]?.[trimmed];if(!hit)return value;return value.replace(trimmed,hit)}
+function translated(value){
+  const trimmed=value.trim(),hit=dictionaries[current]?.[trimmed];
+  if(hit)return value.replace(trimmed,hit);
+  if(trimmed.startsWith("Sent "))return value.replace(trimmed,`${dictionaries[current]?.Sent||"Sent"} ${trimmed.slice(5)}`);
+  const withdraw=trimmed.match(/^Withdraw the friend request sent to (.+)\?$/);
+  if(withdraw)return value.replace(trimmed,translate("Withdraw the friend request sent to {name}?",{name:withdraw[1]}));
+  return value;
+}
+export function translate(key,params={}){let value=dictionaries[current]?.[key]||key;for(const [name,replacement] of Object.entries(params))value=value.replaceAll(`{${name}}`,replacement);return value}
 function scan(root=document.body){
   if(!root)return;applying=true;
   const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;

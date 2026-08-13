@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from ..database import get_db
-from ..models import User, Friendship, FriendshipStatus, Block
+from ..models import User, Friendship, FriendshipStatus, Block, Notification
 from ..auth import get_current_user
 from ..notifications import create_notification
 from ..activity import log_activity
@@ -38,6 +38,36 @@ def requests(db: Session = Depends(get_db), user: User = Depends(get_current_use
         {"id": r.id, "user": db.get(User, r.requester_id), "created_at": r.created_at}
         for r in rows
     ]
+
+
+@router.get("/requests/sent")
+def sent_requests(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(Friendship).filter(
+        Friendship.requester_id == user.id,
+        Friendship.status == FriendshipStatus.pending,
+    ).order_by(Friendship.created_at.desc()).all()
+    return [
+        {"id": row.id, "user": db.get(User, row.addressee_id), "created_at": row.created_at}
+        for row in rows
+    ]
+
+
+@router.delete("/requests/{request_id}")
+def cancel_sent_request(request_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    row = db.get(Friendship, request_id)
+    if not row or row.requester_id != user.id or row.status != FriendshipStatus.pending:
+        raise HTTPException(404, "Sent friend request not found")
+    target = db.get(User, row.addressee_id)
+    db.query(Notification).filter(
+        Notification.type == "friend_request",
+        Notification.entity_type == "friendship",
+        Notification.entity_id == row.id,
+    ).delete(synchronize_session=False)
+    if target:
+        log_activity(db, user.id, "friends", "friend_request_cancelled", f"Cancelled the friend request sent to {target.name}", target_user_id=target.id)
+    db.delete(row)
+    db.commit()
+    return {"message": "Friend request cancelled"}
 
 
 @router.post("/{target_id}")
