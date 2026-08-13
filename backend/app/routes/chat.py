@@ -6,13 +6,14 @@ from pathlib import Path
 import uuid
 import json
 import re
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from ..database import get_db, SessionLocal
 from ..models import User, Conversation, Message, MessageReaction, Block, ChatGroup, ChatGroupMember, ChatGroupJoinRequest, ChatPoll, ChatPollOption, ChatPollVote
 from ..auth import get_current_user
 from ..config import settings
-from ..schemas import MessageCreate, ReactionIn, ChatGroupCreate, ChatGroupUpdate, ChatPollCreate
+from ..schemas import MessageCreate, ReactionIn, ChatGroupCreate, ChatGroupUpdate, ChatPollCreate, DirectChatUpdate
 from ..notifications import create_notification
 from .notifications import notification_ws
 
@@ -138,6 +139,22 @@ def conversation_state(conv: Conversation, user_id: int):
 def set_conversation_state(conv: Conversation, user_id: int, field: str, value):
     side = "a" if conv.user_a_id == user_id else "b"
     setattr(conv, f"{field}_{side}", value)
+
+
+def direct_chat_settings(conv: Conversation, user_id: int, other: User):
+    side = "a" if conv.user_a_id == user_id else "b"
+    other_side = "b" if side == "a" else "a"
+    try: effects = json.loads(conv.word_effects or "{}")
+    except (TypeError, ValueError): effects = {}
+    return {"conversation_id": conv.id, "theme": conv.theme or "default",
+            "quick_reaction": conv.quick_reaction or "👍",
+            "my_nickname": getattr(conv, f"nickname_{side}") or "",
+            "other_nickname": getattr(conv, f"nickname_{other_side}") or "",
+            "word_effects": effects, "disappearing_seconds": conv.disappearing_seconds or 0,
+            "muted_until": getattr(conv, f"muted_until_{side}"),
+            "restricted": bool(getattr(conv, f"restricted_{side}")),
+            "other": {"id": other.id, "name": other.name, "username": other.username,
+                      "avatar_url": other.avatar_url}}
 
 
 def message_reaction_state(db: Session, message_id: int, viewer_id: int):
@@ -646,6 +663,34 @@ def clear_conversation(conversation_id: int, db: Session = Depends(get_db), user
     return {"message": "Conversation removed"}
 
 
+@router.get("/{other_user_id}/settings")
+def get_direct_settings(other_user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    other = db.get(User, other_user_id)
+    if not other: raise HTTPException(404, "User not found")
+    conv = get_or_create_conversation(db, user.id, other_user_id)
+    db.commit()
+    return direct_chat_settings(conv, user.id, other)
+
+
+@router.put("/{other_user_id}/settings")
+def update_direct_settings(other_user_id: int, data: DirectChatUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    other = db.get(User, other_user_id)
+    if not other: raise HTTPException(404, "User not found")
+    conv = get_or_create_conversation(db, user.id, other_user_id)
+    side = "a" if conv.user_a_id == user.id else "b"
+    other_side = "b" if side == "a" else "a"
+    conv.theme, conv.quick_reaction = data.theme, data.quick_reaction
+    setattr(conv, f"nickname_{side}", data.my_nickname.strip() if data.my_nickname else None)
+    setattr(conv, f"nickname_{other_side}", data.other_nickname.strip() if data.other_nickname else None)
+    conv.word_effects = json.dumps({str(k).strip(): str(v).strip() for k, v in data.word_effects.items() if str(k).strip() and str(v).strip()}, ensure_ascii=False)
+    conv.disappearing_seconds = data.disappearing_seconds
+    setattr(conv, f"restricted_{side}", data.restricted)
+    mute = None if data.mute_minutes == 0 else (datetime.utcnow() + timedelta(days=3650) if data.mute_minutes == -1 else datetime.utcnow() + timedelta(minutes=data.mute_minutes))
+    setattr(conv, f"muted_until_{side}", mute)
+    db.commit(); db.refresh(conv)
+    return direct_chat_settings(conv, user.id, other)
+
+
 @router.get("/{other_user_id}/messages")
 def messages(
     other_user_id: int,
@@ -662,6 +707,8 @@ def messages(
     conv = get_or_create_conversation(db, user.id, other_user_id)
     db.commit()
 
+    db.query(Message).filter(Message.conversation_id == conv.id, Message.expires_at != None, Message.expires_at <= datetime.utcnow()).delete(synchronize_session=False)
+    db.commit()
     query = db.query(Message).filter(Message.conversation_id == conv.id)
     state = conversation_state(conv, user.id)
     if state["cleared_at"]:
@@ -677,6 +724,8 @@ def messages(
     for msg in rows:
         if msg.sender_id == other_user_id and not msg.is_read:
             msg.is_read = True
+            if conv.disappearing_seconds:
+                msg.expires_at = datetime.utcnow() + timedelta(seconds=conv.disappearing_seconds)
             changed = True
 
     if changed:

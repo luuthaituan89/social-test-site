@@ -96,6 +96,17 @@ class ChatGroupUpdate(BaseModel):
     member_customization: bool = False
 
 
+class DirectChatUpdate(BaseModel):
+    theme: str = Field(default="default", max_length=40)
+    quick_reaction: str = Field(default="👍", max_length=20)
+    my_nickname: Optional[str] = Field(default=None, max_length=120)
+    other_nickname: Optional[str] = Field(default=None, max_length=120)
+    word_effects: dict[str, str] = Field(default_factory=dict)
+    disappearing_seconds: int = Field(default=0, ge=0, le=86400)
+    mute_minutes: int = Field(default=0, ge=-1, le=525600)
+    restricted: bool = False
+
+
 class ChatPollCreate(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     options: list[str] = Field(min_length=2, max_length=10)

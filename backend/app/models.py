@@ -131,6 +131,16 @@ class Conversation(Base):
     archived_b: Mapped[bool] = mapped_column(Boolean, default=False)
     cleared_at_a: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cleared_at_b: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    theme: Mapped[str] = mapped_column(String(40), default="default")
+    quick_reaction: Mapped[str] = mapped_column(String(20), default="👍")
+    nickname_a: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    nickname_b: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    word_effects: Mapped[str | None] = mapped_column(Text, nullable=True)
+    disappearing_seconds: Mapped[int] = mapped_column(default=0)
+    muted_until_a: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    muted_until_b: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    restricted_a: Mapped[bool] = mapped_column(Boolean, default=False)
+    restricted_b: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class ChatGroup(Base):
@@ -219,6 +229,7 @@ class Message(Base):
     is_unsent: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class MessageReaction(Base):
