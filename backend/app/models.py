@@ -31,6 +31,8 @@ class User(Base):
     hometown: Mapped[str | None] = mapped_column(String(150), nullable=True)
     gender: Mapped[str | None] = mapped_column(String(30), nullable=True)
     relationship_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    relationship_partner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    relationship_since: Mapped[date | None] = mapped_column(Date, nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -174,6 +176,19 @@ class Notification(Base):
     entity_id: Mapped[int | None] = mapped_column(nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class RelationshipRequest(Base):
+    __tablename__ = "relationship_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    requester_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    addressee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    relationship_status: Mapped[str] = mapped_column(String(50))
+    relationship_since: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Album(Base):

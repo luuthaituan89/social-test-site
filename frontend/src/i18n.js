@@ -24,15 +24,36 @@ const extras={
   th:{"Sent requests":"คำขอที่ส่งแล้ว","Manage friend requests you have sent.":"จัดการคำขอเป็นเพื่อนที่คุณส่งแล้ว","No sent requests.":"ไม่มีคำขอที่ส่งแล้ว","Sent":"ส่งเมื่อ","Withdraw":"ถอนคำขอ","Cancel friend request?":"ถอนคำขอเป็นเพื่อนหรือไม่?","Withdraw the friend request sent to {name}?":"ถอนคำขอเป็นเพื่อนที่ส่งถึง {name} หรือไม่?","Keep request":"เก็บคำขอไว้"}
 };
 for(const [locale,values] of Object.entries(extras))Object.assign(dictionaries[locale],values);
+const relationshipExtras={
+  en:{"In a civil union":"In a civil union","In a domestic partnership":"In a domestic partnership","In an open relationship":"In an open relationship","Separated":"Separated","Divorced":"Divorced","Widowed":"Widowed","Partner (optional)":"Partner (optional)","Search for a person to tag...":"Search for a person to tag...","Remove partner":"Remove partner","Start date (optional)":"Start date (optional)","Engagement date (optional)":"Engagement date (optional)","Wedding / anniversary date (optional)":"Wedding / anniversary date (optional)","with":"with","· since":"· since"},
+  vi:{"In a civil union":"Kết hợp dân sự","In a domestic partnership":"Quan hệ chung sống","In an open relationship":"Trong một mối quan hệ mở","Separated":"Ly thân","Divorced":"Đã ly hôn","Widowed":"Góa","Partner (optional)":"Người yêu/vợ/chồng (không bắt buộc)","Search for a person to tag...":"Tìm người để gắn thẻ...","Remove partner":"Xóa người được gắn thẻ","Start date (optional)":"Ngày bắt đầu (không bắt buộc)","Engagement date (optional)":"Ngày đính hôn (không bắt buộc)","Wedding / anniversary date (optional)":"Ngày cưới/kỷ niệm (không bắt buộc)","with":"với","· since":"· từ"},
+  ko:{"In a civil union":"시민 결합 중","In a domestic partnership":"동거 관계 중","In an open relationship":"열린 관계 중","Separated":"별거 중","Divorced":"이혼","Widowed":"사별","Partner (optional)":"파트너 (선택)","Search for a person to tag...":"태그할 사람 검색...","Remove partner":"파트너 제거","Start date (optional)":"시작일 (선택)","Engagement date (optional)":"약혼일 (선택)","Wedding / anniversary date (optional)":"결혼/기념일 (선택)","with":"파트너","· since":"· 시작"},
+  ja:{"In a civil union":"シビルユニオン","In a domestic partnership":"ドメスティックパートナーシップ","In an open relationship":"オープンな関係","Separated":"別居中","Divorced":"離婚","Widowed":"死別","Partner (optional)":"パートナー（任意）","Search for a person to tag...":"タグする人を検索...","Remove partner":"パートナーを削除","Start date (optional)":"開始日（任意）","Engagement date (optional)":"婚約日（任意）","Wedding / anniversary date (optional)":"結婚日／記念日（任意）","with":"相手","· since":"· 開始"},
+  zh:{"In a civil union":"民事结合","In a domestic partnership":"同居伴侣关系","In an open relationship":"开放式关系","Separated":"分居","Divorced":"离异","Widowed":"丧偶","Partner (optional)":"伴侣（可选）","Search for a person to tag...":"搜索要标记的人...","Remove partner":"移除伴侣","Start date (optional)":"开始日期（可选）","Engagement date (optional)":"订婚日期（可选）","Wedding / anniversary date (optional)":"结婚／纪念日（可选）","with":"与","· since":"· 始于"},
+  th:{"In a civil union":"จดทะเบียนคู่ชีวิต","In a domestic partnership":"คู่ชีวิตร่วมบ้าน","In an open relationship":"ความสัมพันธ์แบบเปิด","Separated":"แยกกันอยู่","Divorced":"หย่าร้าง","Widowed":"ม่าย","Partner (optional)":"คู่รัก (ไม่บังคับ)","Search for a person to tag...":"ค้นหาคนที่จะแท็ก...","Remove partner":"นำคู่รักออก","Start date (optional)":"วันที่เริ่มต้น (ไม่บังคับ)","Engagement date (optional)":"วันที่หมั้น (ไม่บังคับ)","Wedding / anniversary date (optional)":"วันแต่งงาน/วันครบรอบ (ไม่บังคับ)","with":"กับ","· since":"· ตั้งแต่"}
+};
+for(const [locale,values] of Object.entries(relationshipExtras))Object.assign(dictionaries[locale],values);
+const relationshipWorkflowExtras={
+  en:{"Accept":"Accept","Decline":"Decline","(pending)":"(pending)","{name} wants to add you to their relationship status":"{name} wants to add you to their relationship status","{name} accepted your relationship request":"{name} accepted your relationship request","{name} declined your relationship request":"{name} declined your relationship request"},
+  vi:{"Accept":"Đồng ý","Decline":"Từ chối","(pending)":"(đang chờ)","{name} wants to add you to their relationship status":"{name} muốn thêm bạn vào tình trạng quan hệ của họ","{name} accepted your relationship request":"{name} đã đồng ý yêu cầu xác nhận quan hệ của bạn","{name} declined your relationship request":"{name} đã từ chối yêu cầu xác nhận quan hệ của bạn"},
+  ko:{"Accept":"수락","Decline":"거절","(pending)":"(대기 중)","{name} wants to add you to their relationship status":"{name}님이 관계 상태에 회원님을 추가하려고 합니다","{name} accepted your relationship request":"{name}님이 관계 요청을 수락했습니다","{name} declined your relationship request":"{name}님이 관계 요청을 거절했습니다"},
+  ja:{"Accept":"承認","Decline":"拒否","(pending)":"(承認待ち)","{name} wants to add you to their relationship status":"{name}さんが交際ステータスにあなたを追加しようとしています","{name} accepted your relationship request":"{name}さんが交際リクエストを承認しました","{name} declined your relationship request":"{name}さんが交際リクエストを拒否しました"},
+  zh:{"Accept":"同意","Decline":"拒绝","(pending)":"（待确认）","{name} wants to add you to their relationship status":"{name} 想将你添加到其感情状态中","{name} accepted your relationship request":"{name} 已同意你的关系确认请求","{name} declined your relationship request":"{name} 已拒绝你的关系确认请求"},
+  th:{"Accept":"ยอมรับ","Decline":"ปฏิเสธ","(pending)":"(รอการยืนยัน)","{name} wants to add you to their relationship status":"{name} ต้องการเพิ่มคุณในสถานะความสัมพันธ์","{name} accepted your relationship request":"{name} ยอมรับคำขอความสัมพันธ์ของคุณแล้ว","{name} declined your relationship request":"{name} ปฏิเสธคำขอความสัมพันธ์ของคุณ"}
+};
+for(const [locale,values] of Object.entries(relationshipWorkflowExtras))Object.assign(dictionaries[locale],values);
+const friendSearchLabels={en:"Search your friends to tag...",vi:"Tìm trong danh sách bạn bè để gắn thẻ...",ko:"태그할 친구 검색...",ja:"タグする友達を検索...",zh:"搜索要标记的好友...",th:"ค้นหาเพื่อนที่จะแท็ก..."};
+for(const [locale,label] of Object.entries(friendSearchLabels))dictionaries[locale]["Search for a person to tag..."]=label;
 let current="en",observer=null,applying=false;
 const textState=new WeakMap(),attrState=new WeakMap();
-const ignored=".post-content,.comment-body,.bubble,.profile-bio,.shared-content,.notification-content,.album-card small,.album-modal-title p";
+const ignored=".post-content,.comment-body,.bubble,.profile-bio,.shared-content,.album-card small,.album-modal-title p";
 function translated(value){
   const trimmed=value.trim(),hit=dictionaries[current]?.[trimmed];
   if(hit)return value.replace(trimmed,hit);
   if(trimmed.startsWith("Sent "))return value.replace(trimmed,`${dictionaries[current]?.Sent||"Sent"} ${trimmed.slice(5)}`);
   const withdraw=trimmed.match(/^Withdraw the friend request sent to (.+)\?$/);
   if(withdraw)return value.replace(trimmed,translate("Withdraw the friend request sent to {name}?",{name:withdraw[1]}));
+  for(const template of ["{name} wants to add you to their relationship status","{name} accepted your relationship request","{name} declined your relationship request"]){const suffix=template.replace("{name}","");if(trimmed.endsWith(suffix))return value.replace(trimmed,translate(template,{name:trimmed.slice(0,-suffix.length)}))}
   return value;
 }
 export function translate(key,params={}){let value=dictionaries[current]?.[key]||key;for(const [name,replacement] of Object.entries(params))value=value.replaceAll(`{${name}}`,replacement);return value}

@@ -12,6 +12,8 @@ class UserPublic(BaseModel):
     hometown: Optional[str] = None
     gender: Optional[str] = None
     relationship_status: Optional[str] = None
+    relationship_partner_id: Optional[int] = None
+    relationship_since: Optional[date] = None
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
     cover_url: Optional[str] = None
@@ -41,9 +43,11 @@ class ProfileUpdate(BaseModel):
     hometown: Optional[str] = Field(default=None, max_length=150)
     gender: Optional[str] = Field(default=None, max_length=30)
     relationship_status: Optional[str] = Field(default=None, max_length=50)
+    relationship_partner_id: Optional[int] = None
+    relationship_since: Optional[date] = None
     bio: Optional[str] = None
 
-    @field_validator("dob", mode="before")
+    @field_validator("dob", "relationship_since", mode="before")
     @classmethod
     def empty_date_is_none(cls, value):
         return None if value == "" else value

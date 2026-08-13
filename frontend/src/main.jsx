@@ -225,8 +225,13 @@ function Profile({data,me,reload,message,open}){
     hometown:user.hometown||"",
     gender:user.gender||"",
     relationship_status:user.relationship_status||"",
+    relationship_partner_id:user.relationship_partner_id||null,
+    relationship_since:user.relationship_since||"",
     bio:user.bio||""
   });
+  const [partnerQuery,setPartnerQuery]=useState("");
+  const [partnerResults,setPartnerResults]=useState([]);
+  const [selectedPartner,setSelectedPartner]=useState(user.relationship_partner||null);
   const [coverBusy,setCoverBusy]=useState(false);
   const [confirmUnfriend,setConfirmUnfriend]=useState(false);
   const [imageEditor,setImageEditor]=useState(null);
@@ -240,9 +245,18 @@ function Profile({data,me,reload,message,open}){
       hometown:user.hometown||"",
       gender:user.gender||"",
       relationship_status:user.relationship_status||"",
+      relationship_partner_id:user.relationship_partner_id||null,
+      relationship_since:user.relationship_since||"",
       bio:user.bio||""
     });
-  },[user.id,user.name,user.dob,user.hometown,user.gender,user.relationship_status,user.bio]);
+    setSelectedPartner(user.relationship_partner||null);setPartnerQuery("");setPartnerResults([]);
+  },[user.id,user.name,user.dob,user.hometown,user.gender,user.relationship_status,user.relationship_partner_id,user.relationship_since,user.bio]);
+
+  useEffect(()=>{
+    if(!editing||!partnerQuery.trim()){setPartnerResults([]);return}
+    let cancelled=false;const timer=setTimeout(async()=>{try{const rows=await api("/api/friends"),needle=partnerQuery.trim().toLowerCase();if(!cancelled)setPartnerResults((rows||[]).filter(item=>item.id!==me.id&&(item.name?.toLowerCase().includes(needle)||item.username?.toLowerCase().includes(needle))).slice(0,8))}catch{if(!cancelled)setPartnerResults([])}},200);
+    return()=>{cancelled=true;clearTimeout(timer)};
+  },[partnerQuery,editing,me.id]);
 
   async function save(){
     try{
@@ -374,18 +388,29 @@ function Profile({data,me,reload,message,open}){
               </select>
             </label>
 
-            <label>
+            <label className="full-row">
               <span>Relationship status</span>
-              <select value={form.relationship_status} onChange={e=>setForm({...form,relationship_status:e.target.value})}>
+              <select value={form.relationship_status} onChange={e=>{const status=e.target.value,settable=RELATIONSHIP_WITH_PARTNER.has(status);setForm({...form,relationship_status:status,relationship_partner_id:settable?form.relationship_partner_id:null,relationship_since:settable?form.relationship_since:""});if(!settable){setSelectedPartner(null);setPartnerQuery("");setPartnerResults([])}}}>
                 <option value="">Not specified</option>
                 <option value="single">Single</option>
                 <option value="in_a_relationship">In a relationship</option>
                 <option value="engaged">Engaged</option>
                 <option value="married">Married</option>
+                <option value="civil_union">In a civil union</option>
+                <option value="domestic_partnership">In a domestic partnership</option>
+                <option value="open_relationship">In an open relationship</option>
                 <option value="complicated">It's complicated</option>
+                <option value="separated">Separated</option>
+                <option value="divorced">Divorced</option>
+                <option value="widowed">Widowed</option>
                 <option value="prefer_not_to_say">Prefer not to say</option>
               </select>
             </label>
+
+            {RELATIONSHIP_WITH_PARTNER.has(form.relationship_status)&&<div className="relationship-details full-row">
+              <label><span>Partner (optional)</span>{selectedPartner?<div className="relationship-partner-chip"><Avatar user={selectedPartner} size={38}/><span><b>{selectedPartner.name}</b><small>@{selectedPartner.username}</small></span><button type="button" title="Remove partner" onClick={()=>{setSelectedPartner(null);setForm({...form,relationship_partner_id:null})}}><X size={17}/></button></div>:<div className="relationship-search"><input value={partnerQuery} onChange={e=>setPartnerQuery(e.target.value)} placeholder="Search for a person to tag..."/>{partnerResults.length>0&&<div className="relationship-results">{partnerResults.map(item=><button type="button" key={item.id} onClick={()=>{setSelectedPartner(item);setForm({...form,relationship_partner_id:item.id});setPartnerQuery("");setPartnerResults([])}}><Avatar user={item} size={36}/><span><b>{item.name}</b><small>@{item.username}</small></span></button>)}</div>}</div>}</label>
+              <label><span>{relationshipDateLabel(form.relationship_status)}</span><input type="date" value={form.relationship_since} onChange={e=>setForm({...form,relationship_since:e.target.value})}/></label>
+            </div>}
 
             <label className="full-row">
               <span>Bio</span>
@@ -402,7 +427,7 @@ function Profile({data,me,reload,message,open}){
           <span>📍 {user.hometown||"Hometown not set"}</span>
           <span>🎂 {user.dob?new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeZone:"UTC"}).format(new Date(`${user.dob}T00:00:00Z`)):"Birthday not set"}</span>
           <span>⚧ {formatGender(user.gender)}</span>
-          <span>❤️ {formatRelationship(user.relationship_status)}</span>
+          {data.pending_relationship?<span className="profile-relationship relationship-pending">❤️ {formatRelationship(data.pending_relationship.relationship_status)} with <button onClick={()=>open(data.pending_relationship.partner.id)}>{data.pending_relationship.partner.name}</button>{data.pending_relationship.relationship_since&&<> · since {formatDate(data.pending_relationship.relationship_since)}</>} <b>(pending)</b></span>:<span className="profile-relationship">❤️ {formatRelationship(user.relationship_status)}{user.relationship_partner&&<> with <button onClick={()=>open(user.relationship_partner.id)}>{user.relationship_partner.name}</button></>}{user.relationship_since&&<> · since {formatDate(user.relationship_since)}</>}</span>}
         </div>}
 
         {!mine&&data.mutual_friends?.length>0&&<div className="mutual-section">
@@ -457,11 +482,20 @@ function formatRelationship(value){
     in_a_relationship:"In a relationship",
     engaged:"Engaged",
     married:"Married",
+    civil_union:"In a civil union",
+    domestic_partnership:"In a domestic partnership",
+    open_relationship:"In an open relationship",
     complicated:"It's complicated",
+    separated:"Separated",
+    divorced:"Divorced",
+    widowed:"Widowed",
     prefer_not_to_say:"Prefer not to say"
   };
   return map[value]||"Relationship status not set";
 }
+
+const RELATIONSHIP_WITH_PARTNER=new Set(["in_a_relationship","engaged","married","civil_union","domestic_partnership","open_relationship","complicated"]);
+function relationshipDateLabel(status){return status==="engaged"?"Engagement date (optional)":status==="married"?"Wedding / anniversary date (optional)":"Start date (optional)"}
 
 function ProfilePosts({userId,me,open,refreshKey}){
   const[posts,setPosts]=useState([]);
@@ -1071,17 +1105,22 @@ function RoutedApp(){
   }
 
   useEffect(()=>{if(tok())api("/api/users/me").then(setUser).catch(()=>{localStorage.removeItem("socialn_token");window.history.replaceState({},"","/")})},[]);
-  useEffect(()=>{if(!user)return;refresh();resolvePath(true);const onPop=()=>resolvePath(true);window.addEventListener("popstate",onPop);const w=new WebSocket(`${WS}/api/notifications/ws?token=${encodeURIComponent(tok())}`);w.onopen=()=>w.send("ready");w.onmessage=()=>{loadN();loadMessageUnread();loadC()};return()=>{window.removeEventListener("popstate",onPop);w.close()}},[user?.id]);
+  useEffect(()=>{if(!user)return;refresh();resolvePath(true);const onPop=()=>resolvePath(true);window.addEventListener("popstate",onPop);const w=new WebSocket(`${WS}/api/notifications/ws?token=${encodeURIComponent(tok())}`);w.onopen=()=>w.send("ready");w.onmessage=async event=>{loadN();loadMessageUnread();loadC();try{const payload=JSON.parse(event.data);if(["relationship_accepted","relationship_declined","relationship_unlinked"].includes(payload?.reason)){const updated=await api(`/api/users/${user.id}/profile`);setProfile(current=>Number(current?.user?.id)===Number(user.id)?updated:current);setUser(await api("/api/users/me"))}}catch{}};return()=>{window.removeEventListener("popstate",onPop);w.close()}},[user?.id]);
 
   function query(v){setSearch(v);clearTimeout(searchTimerRef.current);if(!v.trim()){setResults([]);return}searchTimerRef.current=setTimeout(async()=>{try{setResults(await api(`/api/users/search?q=${encodeURIComponent(v.trim())}`))}catch{setResults([])}},450)}
   async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.type==="new_message"&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
+  async function respondRelationship(n,action){try{await api(`/api/users/relationship-requests/${n.entity_id}/${action}`,{method:"POST"});await loadN();const updated=await api("/api/users/me");setUser(updated);if(view==="profile"&&Number(profile?.user?.id)===Number(user.id))await reloadProfile(user.id)}catch(e){alert(e.message)}}
   function logout(){localStorage.removeItem("socialn_token");window.history.replaceState({},"","/");setUser(null)}
   function toggleSidebar(){if(window.matchMedia("(max-width: 900px)").matches)setMobileSidebarOpen(value=>!value);else setSidebarCollapsed(value=>!value)}
 
   if(!user)return <Login language={language} onLanguageChange={setLanguage} onLogin={u=>{setUser(u);window.history.replaceState({},"","/")}}/>;
   return <div><ConfirmHost/>
     <header className="topbar"><button className="sidebar-toggle" onClick={toggleSidebar} aria-label={mobileSidebarOpen||!sidebarCollapsed?"Close navigation menu":"Open navigation menu"} aria-expanded={mobileSidebarOpen||!sidebarCollapsed}><Menu size={23}/></button><div className="brand" onClick={()=>go("/","home")}>Social<span>N</span></div><div className="search"><Search/><input value={search} onChange={e=>query(e.target.value)} placeholder="Search SocialN..."/>{results.length>0&&<div className="search-results">{results.map(u=><button key={u.id} onClick={()=>{openProfile(u.id);setResults([]);setSearch("")}}><Avatar user={u}/><span>{u.name}<small>@{u.username}</small></span></button>)}</div>}</div>
-      <div className="top-actions"><button className="message-icon-btn top-messages" title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/>{messageUnread>0&&<span className="badge">{messageUnread>99?"99+":messageUnread}</span>}</button><div className="notif-wrap top-notifications"><button className="notification-btn" title="Notifications" onClick={()=>{setDrop(value=>!value);setAccountDrop(false)}}><Bell/>{unread>0&&<span className="badge">{unread}</span>}</button>{drop&&<div className="notif-dropdown"><div className="notif-dropdown-head"><b>Notifications</b><button onClick={async()=>{await api("/api/notifications/read-all",{method:"POST"});loadN()}}>Mark all read</button></div><div className="notif-scroll">{notifs.slice(0,20).map(n=><button className={`notification-row ${n.is_read?"":"unread"}`} key={n.id} onClick={()=>read(n)}><Avatar user={n.actor}/><div className="notification-content">{n.message}<small>{formatDateTime(n.created_at)}</small></div></button>)}</div></div>}</div><div className="account-wrap"><button className="account-trigger" title="Account" aria-expanded={accountDrop} onClick={()=>{setAccountDrop(value=>!value);setDrop(false)}}><Avatar user={user} size={40}/><span className="account-caret">⌄</span></button>{accountDrop&&<div className="account-dropdown"><button className="account-profile" onClick={()=>openProfile(user.id)}><Avatar user={user} size={46}/><span><b>{user.name}</b><small>View your profile</small></span></button><div className="account-divider"/><button onClick={()=>go("/settings","settings")}><Settings size={20}/><span>Settings</span></button><button onClick={logout}><LogOut size={20}/><span>Log out</span></button></div>}</div></div>
+      <div className="top-actions">
+        <button className="message-icon-btn top-messages" title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/>{messageUnread>0&&<span className="badge">{messageUnread>99?"99+":messageUnread}</span>}</button>
+        <div className="notif-wrap top-notifications"><button className="notification-btn" title="Notifications" onClick={()=>{setDrop(value=>!value);setAccountDrop(false)}}><Bell/>{unread>0&&<span className="badge">{unread}</span>}</button>{drop&&<div className="notif-dropdown"><div className="notif-dropdown-head"><b>Notifications</b><button onClick={async()=>{await api("/api/notifications/read-all",{method:"POST"});loadN()}}>Mark all read</button></div><div className="notif-scroll">{notifs.slice(0,20).map(n=>n.type==="relationship_request"?<div className={`notification-row relationship-notification ${n.is_read?"":"unread"}`} key={n.id}><Avatar user={n.actor}/><div className="notification-content">{n.message}<small>{formatDateTime(n.created_at)}</small><div className="relationship-notification-actions"><button className="primary" onClick={()=>respondRelationship(n,"accept")}>Accept</button><button className="secondary" onClick={()=>respondRelationship(n,"decline")}>Decline</button></div></div></div>:<button className={`notification-row ${n.is_read?"":"unread"}`} key={n.id} onClick={()=>read(n)}><Avatar user={n.actor}/><div className="notification-content">{n.message}<small>{formatDateTime(n.created_at)}</small></div></button>)}</div></div>}</div>
+        <div className="account-wrap"><button className="account-trigger" title="Account" aria-expanded={accountDrop} onClick={()=>{setAccountDrop(value=>!value);setDrop(false)}}><Avatar user={user} size={40}/><span className="account-caret">⌄</span></button>{accountDrop&&<div className="account-dropdown"><button className="account-profile" onClick={()=>openProfile(user.id)}><Avatar user={user} size={46}/><span><b>{user.name}</b><small>View your profile</small></span></button><div className="account-divider"/><button onClick={()=>go("/settings","settings")}><Settings size={20}/><span>Settings</span></button><button onClick={logout}><LogOut size={20}/><span>Log out</span></button></div>}</div>
+      </div>
     </header>
     <div className={`layout ${sidebarCollapsed?"sidebar-collapsed":""}`}>{mobileSidebarOpen&&<button className="sidebar-backdrop" aria-label="Close navigation menu" onClick={()=>setMobileSidebarOpen(false)}/>}<aside className={`sidebar ${mobileSidebarOpen?"open":""}`}><button className="side-user" title={user.name} onClick={()=>openProfile(user.id)}><Avatar user={user}/><b className="sidebar-label">{user.name}</b></button><button title="Home" onClick={()=>go("/","home")}><Home/><span className="sidebar-label">Home</span></button><button title="Profile" onClick={()=>openProfile(user.id)}><Users/><span className="sidebar-label">Profile</span></button><button title="Friends" onClick={()=>go("/friends","friends")}><UserCheck/><span className="sidebar-label">Friends</span>{requests.length>0&&<span className="side-badge">{requests.length}</span>}</button><button title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/><span className="sidebar-label">Messages</span></button><button title="Activity log" onClick={()=>go("/activity-log","activity")}><History/><span className="sidebar-label">Activity log</span></button><button title="Settings" onClick={()=>go("/settings","settings")}><Settings/><span className="sidebar-label">Settings</span></button></aside>
       <main className={`main ${view==="chat"?"chat-main":view==="profile"?"profile-main":["home","friends","settings","activity","notifications"].includes(view)?"adaptive-main":""}`}>

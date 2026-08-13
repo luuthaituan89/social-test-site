@@ -15,6 +15,8 @@ def ensure_profile_columns():
     statements = [
         "ALTER TABLE users ADD COLUMN gender VARCHAR(30) NULL",
         "ALTER TABLE users ADD COLUMN relationship_status VARCHAR(50) NULL",
+        "ALTER TABLE users ADD COLUMN relationship_partner_id INT NULL",
+        "ALTER TABLE users ADD COLUMN relationship_since DATE NULL",
         "ALTER TABLE users ADD COLUMN username_changed_at DATETIME NULL",
         "ALTER TABLE users ADD COLUMN last_seen_at DATETIME NULL",
         "ALTER TABLE conversations ADD COLUMN pinned_a BOOLEAN NOT NULL DEFAULT FALSE",
