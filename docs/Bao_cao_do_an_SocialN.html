@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Báo cáo đồ án SocialN</title>
+<style>
+@page{size:A4;margin:2.5cm 2.2cm 2.2cm 3cm}
+body{font-family:"Times New Roman",serif;font-size:13.5pt;line-height:1.5;color:#111;text-align:justify}
+h1{font-size:20pt;text-align:center;text-transform:uppercase;margin:24pt 0 14pt;page-break-before:always}
+h1.first{page-break-before:auto}h2{font-size:16pt;margin:18pt 0 8pt}h3{font-size:14pt;margin:14pt 0 6pt}
+p{margin:0 0 8pt;text-indent:1.25cm}.noindent,.cover p,.toc p,.caption,.note{ text-indent:0}
+.cover{height:24cm;text-align:center;display:flex;flex-direction:column;justify-content:space-between;page-break-after:always}
+.cover .school{font-weight:bold;text-transform:uppercase;font-size:15pt}.cover .title{font-size:25pt;font-weight:bold;text-transform:uppercase;line-height:1.3}.cover .subtitle{font-size:18pt;font-weight:bold}.cover .meta{width:78%;margin:auto;text-align:left}.cover .place{font-weight:bold}
+.pagebreak{page-break-before:always}.toc{page-break-after:always}.toc h1{page-break-before:auto}.toc table{width:100%;border-collapse:collapse}.toc td{padding:5px;border-bottom:1px dotted #aaa}.toc td:last-child{text-align:right;width:12%}
+table{width:100%;border-collapse:collapse;margin:10pt 0 14pt;font-size:11.5pt}th,td{border:1px solid #444;padding:6px;vertical-align:top}th{background:#e8edf5;text-align:center}
+pre{font-family:"Courier New",monospace;font-size:9.5pt;line-height:1.35;background:#f1f4f8;border:1px solid #aaa;padding:10px;white-space:pre-wrap}
+ul,ol{margin:5pt 0 10pt 1cm}li{margin:3pt 0}.figure{border:1px solid #777;background:#f8fafc;padding:13px;margin:12pt 0;text-align:left;font-family:"Courier New",monospace;font-size:10.5pt;white-space:pre}.caption{text-align:center;font-style:italic;font-size:11pt}.note{border-left:4px solid #4f46e5;background:#f3f1ff;padding:9px 12px}.good{background:#eefbf2}.bad{background:#fff2f2}.center{text-align:center;text-indent:0}.small{font-size:10.5pt}.signature{margin-top:40pt;display:flex;justify-content:space-around;text-align:center}.signature div{width:40%}
+</style>
+</head>
+<body>
+<section class="cover">
+  <div><p class="school">[Tên trường đại học]</p><p class="school">[Tên khoa/viện]</p><hr></div>
+  <div><p class="subtitle">BÁO CÁO TIỂU LUẬN / ĐỒ ÁN</p><p class="title">XÂY DỰNG MẠNG XÃ HỘI<br>SOCIALN</p><p class="subtitle">Nền tảng mạng xã hội full-stack lấy cảm hứng từ Facebook và Messenger</p></div>
+  <div class="meta"><p><b>Sinh viên thực hiện:</b> ............................................................</p><p><b>Mã sinh viên:</b> ....................................................................</p><p><b>Lớp:</b> ...................................................................................</p><p><b>Giảng viên hướng dẫn:</b> ........................................................</p><p><b>Học phần:</b> ............................................................................</p></div>
+  <p class="place">Hà Nội, tháng 8 năm 2026</p>
+</section>
+
+<section class="toc">
+<h1 class="first">MỤC LỤC</h1>
+<table>
+<tr><td><b>LỜI MỞ ĐẦU</b></td><td>1</td></tr>
+<tr><td><b>CHƯƠNG 1. TỔNG QUAN ĐỀ TÀI</b></td><td>2</td></tr>
+<tr><td>1.1. Lý do chọn đề tài; 1.2. Mục tiêu; 1.3. Phạm vi; 1.4. Phương pháp</td><td>2</td></tr>
+<tr><td><b>CHƯƠNG 2. KHẢO SÁT VÀ PHÂN TÍCH YÊU CẦU</b></td><td>4</td></tr>
+<tr><td>2.1. Đối tượng sử dụng; 2.2. Yêu cầu chức năng; 2.3. Yêu cầu phi chức năng</td><td>4</td></tr>
+<tr><td><b>CHƯƠNG 3. KIẾN TRÚC VÀ CÔNG NGHỆ</b></td><td>7</td></tr>
+<tr><td>3.1. Kiến trúc tổng thể; 3.2. Frontend; 3.3. Backend; 3.4. Dữ liệu; 3.5. Triển khai</td><td>7</td></tr>
+<tr><td><b>CHƯƠNG 4. THIẾT KẾ DỮ LIỆU VÀ LUỒNG XỬ LÝ</b></td><td>11</td></tr>
+<tr><td>4.1. Mô hình dữ liệu; 4.2. Luồng xác thực; 4.3. Feed; 4.4. Chat; 4.5. Media</td><td>11</td></tr>
+<tr><td><b>CHƯƠNG 5. CÁC THÀNH PHẦN CHỨC NĂNG</b></td><td>15</td></tr>
+<tr><td><b>CHƯƠNG 6. PHÂN TÍCH MÃ NGUỒN</b></td><td>22</td></tr>
+<tr><td><b>CHƯƠNG 7. KIỂM THỬ VÀ VẬN HÀNH</b></td><td>27</td></tr>
+<tr><td><b>CHƯƠNG 8. ƯU ĐIỂM, HẠN CHẾ VÀ RỦI RO</b></td><td>30</td></tr>
+<tr><td><b>CHƯƠNG 9. HƯỚNG CẢI THIỆN VÀ LỘ TRÌNH</b></td><td>34</td></tr>
+<tr><td><b>KẾT LUẬN</b></td><td>38</td></tr>
+<tr><td><b>TÀI LIỆU THAM KHẢO VÀ PHỤ LỤC</b></td><td>39</td></tr>
+</table>
+<p class="small"><i>Lưu ý: số trang trong mục lục là định hướng theo bố cục A4 và có thể thay đổi đôi chút khi bổ sung thông tin trường, sinh viên hoặc cập nhật mục lục trong Microsoft Word/LibreOffice.</i></p>
+</section>
+
+<h1 class="first">LỜI MỞ ĐẦU</h1>
+<p>Trong bối cảnh Internet trở thành hạ tầng thiết yếu của đời sống số, mạng xã hội không chỉ là nơi chia sẻ trạng thái mà còn là một hệ thống tổng hợp nhiều bài toán phần mềm: quản lý danh tính, quan hệ người dùng, phân quyền nội dung, xử lý tệp đa phương tiện, giao tiếp thời gian thực, thông báo, tìm kiếm, quốc tế hóa và thiết kế giao diện đáp ứng. Vì vậy, xây dựng một mạng xã hội thu nhỏ là đề tài phù hợp để vận dụng kiến thức về phát triển ứng dụng web full-stack.</p>
+<p>SocialN được xây dựng như một dự án học tập độc lập, lấy cảm hứng từ các trải nghiệm quen thuộc của Facebook và Messenger nhưng không sử dụng mã nguồn độc quyền của Meta. Hệ thống kết hợp React và Vite ở phía trình duyệt, FastAPI và SQLAlchemy ở phía máy chủ, MySQL để lưu trữ dữ liệu, WebSocket cho trao đổi thời gian thực và Docker Compose để đóng gói môi trường chạy.</p>
+<p>Báo cáo này mô tả hiện trạng mã nguồn tại thời điểm tháng 8 năm 2026. Nội dung không chỉ liệt kê tính năng mà còn phân tích quyết định thiết kế, luồng dữ liệu, ưu điểm, hạn chế kỹ thuật và hướng phát triển. Qua đó, báo cáo cung cấp cái nhìn có hệ thống về quá trình hình thành một sản phẩm mạng xã hội từ mô hình dữ liệu đến trải nghiệm người dùng.</p>
+
+<h1>CHƯƠNG 1. TỔNG QUAN ĐỀ TÀI</h1>
+<h2>1.1. Lý do chọn đề tài</h2>
+<p>Mạng xã hội là ví dụ điển hình của hệ thống nhiều người dùng có dữ liệu liên kết phức tạp. Một hành động đơn giản như thả cảm xúc có thể đồng thời làm thay đổi thống kê bài viết, giao diện của người thao tác, thông báo của chủ bài viết và nhật ký hoạt động. Tương tự, một tin nhắn mới phải được lưu bền vững, chuyển đến người nhận theo thời gian thực, cập nhật thứ tự hội thoại, số chưa đọc và trạng thái đọc. Đây là môi trường tốt để nghiên cứu tính nhất quán dữ liệu, quyền truy cập và giao tiếp client–server.</p>
+<h2>1.2. Mục tiêu</h2>
+<ul><li>Xây dựng ứng dụng mạng xã hội có thể chạy hoàn chỉnh trên máy cá nhân bằng Docker Compose.</li><li>Thiết kế REST API có xác thực JWT và kiểm tra quyền theo người dùng.</li><li>Xây dựng giao diện responsive hỗ trợ dark/light mode, nhiều ngôn ngữ và múi giờ.</li><li>Triển khai feed, hồ sơ, bạn bè, nhóm cộng đồng, album, thông báo và nhật ký hoạt động.</li><li>Xây dựng chat cá nhân và chat nhóm hỗ trợ WebSocket, tệp, ảnh, video, voice, GIF, sticker, reaction và các tùy chỉnh hội thoại.</li><li>Đánh giá những phần đã đạt được và xác định lộ trình đưa hệ thống gần mức production.</li></ul>
+<h2>1.3. Phạm vi</h2>
+<p>SocialN tập trung vào chức năng mạng xã hội dành cho người dùng đã đăng ký. Hệ thống chạy với một backend FastAPI, một frontend Vite và một MySQL instance. Media được lưu trên Docker volume cục bộ. Tích hợp bên ngoài chính là GIPHY Search/Trending thông qua backend proxy. Những nội dung nằm ngoài phạm vi hiện tại gồm thanh toán, quảng cáo, livestream thực, gọi âm thanh/video, hệ thống đề xuất bằng học máy và hạ tầng phân tán quy mô lớn.</p>
+<h2>1.4. Phương pháp thực hiện</h2>
+<p>Dự án được phát triển theo phương pháp tăng trưởng lặp: xây dựng luồng cơ bản, kiểm tra trực tiếp trên giao diện, ghi nhận tình huống chưa phù hợp, sau đó mở rộng model, API và frontend. Báo cáo sử dụng phương pháp đọc tĩnh mã nguồn, khảo sát cấu trúc thư mục, thống kê model/route, đối chiếu luồng API và quan sát thiết kế triển khai.</p>
+
+<h1>CHƯƠNG 2. KHẢO SÁT VÀ PHÂN TÍCH YÊU CẦU</h1>
+<h2>2.1. Đối tượng sử dụng</h2>
+<table><tr><th>Đối tượng</th><th>Nhu cầu chính</th><th>Quyền tiêu biểu</th></tr><tr><td>Khách</td><td>Đăng ký, đăng nhập, chọn ngôn ngữ</td><td>Không truy cập dữ liệu riêng tư</td></tr><tr><td>Người dùng</td><td>Hồ sơ, feed, bạn bè, chat, album, nhóm</td><td>Quản lý dữ liệu của mình; tương tác theo quyền riêng tư</td></tr><tr><td>Thành viên nhóm</td><td>Đăng bài, bình luận, reaction, media/file</td><td>Tuân theo thiết lập và kiểm duyệt của nhóm</td></tr><tr><td>Moderator nhóm</td><td>Điều phối nội dung và thành viên</td><td>Thực hiện các thao tác kiểm duyệt được cấp</td></tr><tr><td>Admin nhóm</td><td>Cấu hình và quản trị nhóm</td><td>Quản lý vai trò, thành viên, bài viết và ảnh bìa</td></tr></table>
+<h2>2.2. Yêu cầu chức năng</h2>
+<h3>2.2.1. Tài khoản và hồ sơ</h3><p>Người dùng đăng ký, đăng nhập bằng email/mật khẩu, chỉnh sửa thông tin cá nhân, đổi mật khẩu và username với chu kỳ tối thiểu 30 ngày. Hồ sơ được định tuyến theo username. Avatar và ảnh bìa có thao tác chọn vùng/kéo vị trí; việc thay ảnh tạo bài viết dòng thời gian và phân loại vào album hệ thống.</p>
+<h3>2.2.2. Quan hệ xã hội</h3><p>Hệ thống hỗ trợ gửi/nhận/thu hồi lời mời, xác nhận, từ chối và hủy kết bạn. Tình trạng quan hệ có nhiều trạng thái; trạng thái gắn với người khác chỉ tìm trong danh sách bạn bè và cần người được gắn xác nhận. Người dùng cũng có thể chặn tài khoản.</p>
+<h3>2.2.3. Nội dung</h3><p>Người dùng tạo bài chữ, ảnh, GIF hoặc sticker; đặt quyền public, friends hoặc only_me; sửa, xóa, chia sẻ, bình luận và dùng sáu loại reaction. Album tùy chỉnh có tên, mô tả và quyền riêng tư, hỗ trợ ảnh/video và đồng bộ bài viết timeline khi media bị xóa.</p>
+<h3>2.2.4. Nhắn tin</h3><p>Chat hỗ trợ hội thoại 1–1, kho lưu trữ cá nhân và nhóm chat. Tin nhắn có thể chứa text, emoji/sticker nội tuyến, GIF, ảnh, video, file, voice, reply, forward, pin và reaction. Danh sách chat sắp theo tin mới nhất, kho cá nhân luôn đầu tiên, hội thoại chưa đọc có badge và làm nổi bật. Chat nhóm bổ sung poll, mention thành viên/@all, vai trò admin, tùy chỉnh theme, biệt danh và liên kết mời.</p>
+<h3>2.2.5. Nhóm cộng đồng</h3><p>Groups hỗ trợ public/private, visible/hidden, vai trò, phê duyệt thành viên, rules, kiểm duyệt bài, bài ẩn danh, featured posts, people, media và files. Admin có thể quản lý thành viên, cover và nội dung; member chỉ thực hiện các hành động được cấu hình cho phép.</p>
+<h2>2.3. Yêu cầu phi chức năng</h2>
+<table><tr><th>Nhóm yêu cầu</th><th>Mô tả</th><th>Hiện trạng</th></tr><tr><td>Bảo mật</td><td>Xác thực, phân quyền, kiểm tra block/privacy</td><td>Có JWT và kiểm tra theo route; cần tăng cường production</td></tr><tr><td>Khả dụng</td><td>Giao diện dễ hiểu, thông báo lỗi rõ ràng</td><td>Có responsive, theme, modal và Error Boundary</td></tr><tr><td>Hiệu năng</td><td>Phản hồi nhanh, tránh tải dữ liệu quá lớn</td><td>Phù hợp demo; còn thiếu cursor pagination/cache</td></tr><tr><td>Thời gian thực</td><td>Tin nhắn, typing, presence, badge</td><td>WebSocket kết hợp polling fallback</td></tr><tr><td>Khả năng triển khai</td><td>Môi trường đồng nhất</td><td>Docker Compose với healthcheck MySQL</td></tr><tr><td>Quốc tế hóa</td><td>Nhiều ngôn ngữ và múi giờ</td><td>6 ngôn ngữ; độ phủ bản dịch cần tiếp tục hoàn thiện</td></tr></table>
+
+<h1>CHƯƠNG 3. KIẾN TRÚC VÀ CÔNG NGHỆ</h1>
+<h2>3.1. Kiến trúc tổng thể</h2>
+<div class="figure">┌────────────────────────────────────┐
+│ Trình duyệt                        │
+│ React 19 + Vite + Lucide           │
+└───────────────┬────────────────────┘
+        REST/JSON│ multipart │WebSocket
+                 ▼           ▼
+┌────────────────────────────────────┐
+│ FastAPI + Uvicorn                   │
+│ Auth │ Users │ Posts │ Chat │ Groups│
+│ Albums │ Notifications │ Activity   │
+└───────────────┬─────────────┬──────┘
+                │SQLAlchemy   │proxy
+                ▼             ▼
+       ┌──────────────┐  ┌──────────┐
+       │ MySQL 8.4    │  │ GIPHY API│
+       └──────────────┘  └──────────┘
+                │
+       ┌────────▼──────────┐
+       │ uploads_data      │
+       │ Docker volume     │
+       └───────────────────┘</div>
+<p class="caption">Hình 3.1. Kiến trúc logic của SocialN</p>
+<p>Đây là kiến trúc client–server ba tầng. Frontend chịu trách nhiệm hiển thị và trạng thái tương tác; backend thực thi nghiệp vụ, xác thực và truy cập dữ liệu; MySQL đảm bảo lưu trữ bền vững. Media tách khỏi database và chỉ lưu đường dẫn trong bản ghi. Cách tổ chức phù hợp với đồ án vì dễ chạy, dễ quan sát và đủ thể hiện các thành phần của một hệ thống web hiện đại.</p>
+<h2>3.2. Frontend</h2>
+<p>Frontend dùng React 19.1 và Vite 7.1. Giao diện sử dụng component hàm, hook <code>useState</code>, <code>useEffect</code>, <code>useRef</code>, một bộ định tuyến tự xây dựng dựa trên History API và hàm gọi API dùng JWT. Lucide React cung cấp icon nhất quán. CSS thuần quản lý dark/light theme, responsive sidebar, modal, chat và media viewer.</p>
+<p>Ưu điểm là ít phụ thuộc, bundle đơn giản và thuận lợi khi học. Tuy nhiên, phần lớn giao diện tập trung trong <code>frontend/src/main.jsx</code> khoảng 1.290 dòng và toàn bộ CSS khoảng 193 dòng dài, làm tăng mức ghép nối và khó kiểm thử từng thành phần.</p>
+<h2>3.3. Backend</h2>
+<p>Backend dùng FastAPI 0.116, Pydantic để kiểm tra payload, SQLAlchemy 2.0 làm ORM và Uvicorn phục vụ ASGI. Các route được tách theo miền: auth, users, friends, posts, albums, chat, groups, notifications, activity, upload và giphy. Mã nguồn hiện có hơn 100 khai báo endpoint/WebSocket route, cho thấy phạm vi chức năng tương đối rộng.</p>
+<h2>3.4. Cơ sở dữ liệu</h2>
+<p>MySQL 8.4 được truy cập qua PyMySQL. Tệp model hiện khai báo 29 thực thể ORM, bao phủ tài khoản, quan hệ bạn bè, nội dung, album, chat, notification, activity và group. Khóa ngoại có <code>CASCADE</code> hoặc <code>SET NULL</code> theo ngữ nghĩa. Một số bảng có unique constraint để ngăn trùng quan hệ, reaction hoặc membership.</p>
+<h2>3.5. Đóng gói và triển khai</h2>
+<p>Docker Compose tạo ba service: database ở cổng 3306, backend ở cổng 8000 và frontend ở cổng 5173. MySQL có healthcheck; backend chờ database healthy. Hai named volume <code>mysql_data</code> và <code>uploads_data</code> bảo toàn dữ liệu sau khi container được tái tạo.</p>
+<table><tr><th>Thành phần</th><th>Công nghệ</th><th>Vai trò</th></tr><tr><td>Frontend</td><td>React, Vite, Lucide</td><td>SPA, tương tác, responsive</td></tr><tr><td>Backend</td><td>FastAPI, Uvicorn</td><td>API, nghiệp vụ, WebSocket</td></tr><tr><td>ORM</td><td>SQLAlchemy</td><td>Ánh xạ object–relational</td></tr><tr><td>Database</td><td>MySQL 8.4</td><td>Lưu dữ liệu giao dịch</td></tr><tr><td>Authentication</td><td>JWT, jose, bcrypt/passlib</td><td>Định danh request</td></tr><tr><td>Media</td><td>Multipart + local volume</td><td>Upload và phục vụ tệp</td></tr></table>
+
+<h1>CHƯƠNG 4. THIẾT KẾ DỮ LIỆU VÀ LUỒNG XỬ LÝ</h1>
+<h2>4.1. Các nhóm thực thể</h2>
+<table><tr><th>Miền</th><th>Thực thể chính</th><th>Quan hệ</th></tr><tr><td>Tài khoản</td><td>User, Block, RelationshipRequest</td><td>User tự liên kết với partner/block target</td></tr><tr><td>Bạn bè</td><td>Friendship</td><td>requester–addressee, trạng thái pending/accepted/rejected</td></tr><tr><td>Feed</td><td>Post, Like, Comment</td><td>User–Post; Post–Like/Comment</td></tr><tr><td>Album</td><td>Album, AlbumMedia</td><td>User–Album–Media; liên kết Post</td></tr><tr><td>Chat</td><td>Conversation, Message, MessageReaction</td><td>Hai user hoặc backing conversation cho group</td></tr><tr><td>Chat nhóm</td><td>ChatGroup, ChatGroupMember, Poll</td><td>Conversation–Group–Member–Poll</td></tr><tr><td>Nhóm cộng đồng</td><td>Group, GroupMember, GroupPost, GroupReport</td><td>Nhóm có membership, bài viết và kiểm duyệt</td></tr><tr><td>Hệ thống</td><td>Notification, ActivityLog</td><td>Lưu sự kiện hướng đến người dùng/audit</td></tr></table>
+<h3>4.1.1. Danh mục chi tiết các bảng</h3>
+<p>Qua kiểm tra trực tiếp mã nguồn, cơ sở dữ liệu hiện tại gồm <b>29 bảng vật lý</b> (nhiều hơn con số 28 trong thống kê ban đầu). Tất cả bảng dùng khóa chính số nguyên <code>id</code> tự tăng theo mặc định của SQLAlchemy/MySQL. Bảng dưới mô tả trách nhiệm, khóa ngoại và ràng buộc đặc trưng của toàn bộ 29 bảng.</p>
+<table><tr><th>STT</th><th>Bảng</th><th>Mục đích và trường quan trọng</th><th>Khóa ngoại / Unique</th></tr>
+<tr><td>1</td><td><b>users</b></td><td>Tài khoản và hồ sơ: email, username, password_hash, name, dob, gender, bio, avatar_url, cover_url, relationship_status, last_seen_at.</td><td>FK relationship_partner_id → users.id, ON DELETE SET NULL. UNIQUE email, username.</td></tr>
+<tr><td>2</td><td><b>friendships</b></td><td>Lời mời và quan hệ bạn bè; status: pending, accepted, rejected.</td><td>FK requester_id/addressee_id → users.id, CASCADE. UNIQUE(requester_id, addressee_id).</td></tr>
+<tr><td>3</td><td><b>blocks</b></td><td>Quan hệ chặn có hướng giữa hai tài khoản.</td><td>FK blocker_id/blocked_id → users.id, CASCADE. UNIQUE(blocker_id, blocked_id).</td></tr>
+<tr><td>4</td><td><b>posts</b></td><td>Bài viết feed: content, image_url, sticker, media_type, privacy, album_id, created_at; hỗ trợ share.</td><td>FK author_id → users.id CASCADE; shared_post_id → posts.id. Index author_id, album_id, created_at.</td></tr>
+<tr><td>5</td><td><b>likes</b></td><td>Reaction của user đối với post; reaction chứa like/love/haha/wow/sad/angry.</td><td>FK user_id → users.id, post_id → posts.id, CASCADE. UNIQUE(user_id, post_id).</td></tr>
+<tr><td>6</td><td><b>comments</b></td><td>Bình luận bài viết: content, author, thời gian.</td><td>FK post_id → posts.id, author_id → users.id, CASCADE. Index post_id.</td></tr>
+<tr><td>7</td><td><b>conversations</b></td><td>Hội thoại 1–1 hoặc kênh nền cho chat group; lưu pin/archive/clear theo hai phía, theme, nickname, mute, restrict và disappearing_seconds.</td><td>FK user_a_id/user_b_id → users.id, CASCADE. Hiện nên bổ sung UNIQUE(user_a_id,user_b_id).</td></tr>
+<tr><td>8</td><td><b>chat_groups</b></td><td>Thông tin nhóm chat: name, creator, avatar, theme, quick reaction, approval và invite token.</td><td>FK conversation_id → conversations.id CASCADE, UNIQUE + index; creator_id → users.id. UNIQUE invite_token.</td></tr>
+<tr><td>9</td><td><b>chat_group_members</b></td><td>Thành viên chat group: role, nickname, mute, sound, last_read_at.</td><td>FK chat_group_id → chat_groups.id; user_id → users.id, CASCADE. UNIQUE(chat_group_id,user_id).</td></tr>
+<tr><td>10</td><td><b>chat_group_join_requests</b></td><td>Yêu cầu tham gia chat group và trạng thái xử lý.</td><td>FK group/user, CASCADE. UNIQUE(chat_group_id,user_id).</td></tr>
+<tr><td>11</td><td><b>chat_polls</b></td><td>Câu hỏi bình chọn trong chat group.</td><td>FK chat_group_id → chat_groups.id CASCADE; creator_id → users.id.</td></tr>
+<tr><td>12</td><td><b>chat_poll_options</b></td><td>Các phương án của một poll.</td><td>FK poll_id → chat_polls.id CASCADE; index poll_id.</td></tr>
+<tr><td>13</td><td><b>chat_poll_votes</b></td><td>Lựa chọn của user trong poll.</td><td>FK poll_id, option_id, user_id. UNIQUE(poll_id,user_id), bảo đảm mỗi user một phiếu.</td></tr>
+<tr><td>14</td><td><b>messages</b></td><td>Tin nhắn đa dạng: text/media/sticker/GIF/voice/file/poll; reply, forward, pin, unsend, read và expires_at.</td><td>FK conversation_id → conversations.id CASCADE; sender_id → users.id; reply_to_id và forwarded_from_id → messages.id SET NULL. Index conversation_id.</td></tr>
+<tr><td>15</td><td><b>message_reactions</b></td><td>Reaction của user trên message.</td><td>FK user_id → users.id; message_id → messages.id CASCADE. UNIQUE(user_id,message_id).</td></tr>
+<tr><td>16</td><td><b>notifications</b></td><td>Thông báo gửi đến user: actor, type, message, entity polymorphic, is_read, created_at.</td><td>FK user_id/actor_id → users.id CASCADE. Index user_id, type, is_read, created_at.</td></tr>
+<tr><td>17</td><td><b>relationship_requests</b></td><td>Yêu cầu xác nhận tình trạng quan hệ: requester, addressee, status, ngày quan hệ và responded_at.</td><td>FK requester_id/addressee_id → users.id CASCADE. Index hai user và status.</td></tr>
+<tr><td>18</td><td><b>albums</b></td><td>Album hệ thống hoặc tùy chỉnh: owner, name, description, privacy, kind.</td><td>FK owner_id → users.id CASCADE. UNIQUE(owner_id,kind); index owner_id.</td></tr>
+<tr><td>19</td><td><b>album_media</b></td><td>Ảnh/video trong album: URL, type, caption, privacy, created_at.</td><td>FK album_id → albums.id CASCADE. UNIQUE(album_id,media_url); index album_id.</td></tr>
+<tr><td>20</td><td><b>activity_logs</b></td><td>Nhật ký hoạt động và đăng nhập: category, action, description, entity, target, details, IP, user-agent.</td><td>FK user_id → users.id CASCADE; target_user_id → users.id SET NULL. Index user/category/action/created_at.</td></tr>
+<tr><td>21</td><td><b>groups</b></td><td>Nhóm cộng đồng: owner, name, description, rules, privacy, visibility, type, cover, approval settings.</td><td>FK owner_id → users.id CASCADE. Index owner, name, privacy, visibility, created_at.</td></tr>
+<tr><td>22</td><td><b>group_members</b></td><td>Membership nhóm: user, role, posting mute, notification và joined_at.</td><td>FK group_id → groups.id; user_id → users.id CASCADE. UNIQUE(group_id,user_id).</td></tr>
+<tr><td>23</td><td><b>group_join_requests</b></td><td>Yêu cầu vào group, câu trả lời, trạng thái và thời gian phản hồi.</td><td>FK group_id/user_id CASCADE. UNIQUE(group_id,user_id); index status.</td></tr>
+<tr><td>24</td><td><b>group_bans</b></td><td>Danh sách user bị cấm và admin thực hiện.</td><td>FK group_id, user_id, banned_by_id; CASCADE. UNIQUE(group_id,user_id).</td></tr>
+<tr><td>25</td><td><b>group_posts</b></td><td>Bài viết trong group: content, media, anonymous, pinned, approval status, created_at.</td><td>FK group_id → groups.id; author_id → users.id CASCADE. Index group, author, pinned, status, created_at.</td></tr>
+<tr><td>26</td><td><b>group_post_reactions</b></td><td>Reaction đối với group post.</td><td>FK post_id/user_id CASCADE. UNIQUE(post_id,user_id).</td></tr>
+<tr><td>27</td><td><b>group_post_comments</b></td><td>Bình luận group post.</td><td>FK post_id → group_posts.id; author_id → users.id CASCADE. Index post, author, created_at.</td></tr>
+<tr><td>28</td><td><b>group_post_hidden</b></td><td>Trạng thái ẩn một group post theo từng user.</td><td>FK post_id/user_id CASCADE. UNIQUE(post_id,user_id).</td></tr>
+<tr><td>29</td><td><b>group_reports</b></td><td>Báo cáo vi phạm post/comment: reporter, reason, status và thời gian.</td><td>FK group/reporter/post/comment; CASCADE. Index group, reporter, post, status, created_at.</td></tr>
+</table>
+<p class="note"><b>Hiệu chỉnh số lượng:</b> Thống kê “28 model” trong phiên bản báo cáo trước bị thiếu class <code>GroupReport</code>. Phiên bản này đã kiểm đếm lại và mô tả đủ <b>29 bảng</b>, bảo đảm báo cáo khớp với <code>models.py</code> hiện tại.</p>
+
+<h3>4.1.2. Primary key, foreign key và unique constraint</h3>
+<p><b>Primary key (PK).</b> Tất cả bảng dùng <code>id</code> kiểu integer làm khóa thay thế. Thiết kế này giúp join ngắn, index nhỏ và không phụ thuộc dữ liệu có thể thay đổi như username. Với hệ thống phân tán tương lai có thể cân nhắc UUIDv7/Snowflake để sinh ID không cần một MySQL writer duy nhất.</p>
+<p><b>Foreign key (FK).</b> Các FK thể hiện ownership và bảo vệ tham chiếu. Ví dụ <code>posts.author_id</code>, <code>messages.conversation_id</code>, <code>group_members.group_id</code>. Dữ liệu phụ thuộc hoàn toàn dùng <code>ON DELETE CASCADE</code>; tham chiếu lịch sử cần giữ dùng <code>SET NULL</code>, ví dụ partner bị xóa hoặc message nguồn reply/forward bị xóa.</p>
+<p><b>Unique constraint.</b> Unique đơn trên email, username, invite_token và chat_groups.conversation_id. Unique ghép biến bảng liên kết thành tập hợp không trùng: friendship pair, block pair, user–post reaction, group–member, poll–user vote, album–media URL. Ràng buộc ở database quan trọng vì kiểm tra ở ứng dụng không ngăn được race condition giữa hai request đồng thời.</p>
+<table><tr><th>Ràng buộc</th><th>Ý nghĩa nghiệp vụ</th><th>Nhận xét</th></tr><tr><td>uq_like(user_id,post_id)</td><td>Một user chỉ có một reaction hiện hành trên post</td><td>Đổi reaction bằng UPDATE/upsert</td></tr><tr><td>uq_message_reaction(user_id,message_id)</td><td>Một reaction mỗi user/message</td><td>Ngăn double-click tạo trùng</td></tr><tr><td>uq_chat_group_member(group_id,user_id)</td><td>Một membership duy nhất</td><td>Role là thuộc tính membership</td></tr><tr><td>uq_system_album_kind(owner_id,kind)</td><td>Mỗi user chỉ có một album hệ thống theo kind</td><td>Với kind NULL, MySQL cho nhiều album tùy chỉnh</td></tr><tr><td>uq_group_post_hidden(post_id,user_id)</td><td>Mỗi user chỉ ẩn một post một lần</td><td>Dùng existence thay boolean trên post</td></tr></table>
+
+<h3>4.1.3. Quan hệ 1–1, 1–nhiều và nhiều–nhiều</h3>
+<table><tr><th>Cardinality</th><th>Ví dụ</th><th>Cách triển khai</th></tr><tr><td>1–1</td><td>Conversation ↔ ChatGroup</td><td><code>chat_groups.conversation_id</code> vừa FK vừa UNIQUE. Mỗi chat group có đúng một kênh message.</td></tr><tr><td>1–nhiều</td><td>User → Posts; Post → Comments; Conversation → Messages; Group → GroupPosts</td><td>FK nằm ở bảng “nhiều”; xóa cha thường cascade dữ liệu phụ thuộc.</td></tr><tr><td>Nhiều–nhiều</td><td>User ↔ Group; User ↔ Post reaction; User ↔ ChatGroup; User ↔ Poll</td><td>Bảng liên kết GroupMember, Like, ChatGroupMember, ChatPollVote chứa FK hai phía và thuộc tính bổ sung.</td></tr><tr><td>Tự tham chiếu</td><td>User relationship partner; Post share; Message reply/forward</td><td>FK trỏ về chính bảng; SET NULL ở liên kết cần giữ bản ghi đích.</td></tr><tr><td>Quan hệ có hướng</td><td>Block, Friendship request</td><td>Hai FK cùng trỏ User nhưng có vai trò blocker/blocked hoặc requester/addressee.</td></tr></table>
+<p>Quan hệ User–Friendship về bản chất là nhiều–nhiều tự tham chiếu có trạng thái. Conversation 1–1 cũng là quan hệ tự tham chiếu, nhưng trạng thái pin/archive được lưu hai cột a/b. Việc chuẩn hóa cặp user theo thứ tự ID trong service là bắt buộc; database nên bổ sung <code>UNIQUE(user_a_id,user_b_id)</code> và CHECK <code>user_a_id &lt;= user_b_id</code> để ngăn hội thoại đảo cặp.</p>
+
+<h3>4.1.4. Data dictionary các trường quan trọng</h3>
+<table><tr><th>Bảng.trường</th><th>Kiểu logic</th><th>NULL/Mặc định</th><th>Ý nghĩa và quy tắc</th></tr>
+<tr><td>users.email</td><td>VARCHAR(255)</td><td>NOT NULL, UNIQUE</td><td>Định danh đăng nhập; cần chuẩn hóa lowercase.</td></tr><tr><td>users.username</td><td>VARCHAR(80)</td><td>NOT NULL, UNIQUE</td><td>Slug hồ sơ; chỉ đổi sau 30 ngày.</td></tr><tr><td>users.password_hash</td><td>VARCHAR(255)</td><td>NOT NULL</td><td>Hash bcrypt/passlib, tuyệt đối không lưu mật khẩu rõ.</td></tr><tr><td>users.relationship_partner_id</td><td>INTEGER FK</td><td>NULL</td><td>Partner đã xác nhận; SET NULL khi tài khoản đích mất.</td></tr><tr><td>posts.privacy</td><td>ENUM</td><td>public</td><td>public, friends, only_me; được kiểm tra server-side.</td></tr><tr><td>posts.shared_post_id</td><td>INTEGER FK self</td><td>NULL</td><td>Bài nguồn khi share.</td></tr><tr><td>conversations.user_a_id/user_b_id</td><td>INTEGER FK</td><td>NOT NULL</td><td>Cặp người dùng chuẩn hóa; self-chat cho phép a=b.</td></tr><tr><td>conversations.word_effects</td><td>TEXT/JSON logic</td><td>NULL</td><td>Map cụm từ → emoji; hiện serialize JSON trong TEXT.</td></tr><tr><td>conversations.disappearing_seconds</td><td>INTEGER</td><td>0</td><td>0 tắt; tối đa 86.400 giây theo schema API.</td></tr><tr><td>messages.message_type</td><td>VARCHAR(20)</td><td>text</td><td>text, image, video, file, voice, sticker, gif, poll.</td></tr><tr><td>messages.attachment_url</td><td>VARCHAR(500)</td><td>NULL</td><td>URL media/tệp; binary không lưu trong MySQL.</td></tr><tr><td>messages.reply_to_id</td><td>INTEGER FK self</td><td>NULL</td><td>Tin gốc được trả lời; phải cùng conversation.</td></tr><tr><td>messages.expires_at</td><td>DATETIME</td><td>NULL</td><td>Thời điểm xóa tin tự hủy sau khi đọc.</td></tr><tr><td>chat_group_members.last_read_at</td><td>DATETIME</td><td>NULL</td><td>Mốc tính unread riêng cho từng thành viên.</td></tr><tr><td>notifications.entity_type/entity_id</td><td>VARCHAR + INTEGER</td><td>NULL</td><td>Tham chiếu đa hình logic, không có FK vật lý.</td></tr><tr><td>albums.kind</td><td>VARCHAR(30)</td><td>NULL</td><td>profile/cover/timeline; NULL là album tùy chỉnh.</td></tr><tr><td>activity_logs.details</td><td>TEXT</td><td>NULL</td><td>Metadata hoạt động dạng JSON/string mở rộng.</td></tr><tr><td>groups.privacy/visibility</td><td>VARCHAR(20)</td><td>public/visible</td><td>Quyền xem nội dung và khả năng tìm thấy nhóm.</td></tr><tr><td>group_posts.status</td><td>VARCHAR(20)</td><td>published</td><td>published/pending/rejected phục vụ kiểm duyệt.</td></tr><tr><td>group_reports.status</td><td>VARCHAR(20)</td><td>open</td><td>Trạng thái hàng đợi xử lý báo cáo.</td></tr></table>
+<p class="note"><b>Quy ước thời gian:</b> Backend đang dùng <code>datetime.utcnow()</code> và lưu DATETIME không kèm timezone. Ứng dụng chuyển đổi khi hiển thị theo timezone người dùng. Production nên thống nhất UTC có timezone hoặc quy ước rõ, tránh ghép hậu tố Z thủ công.</p>
+
+<h3>4.1.5. Chuẩn hóa dữ liệu</h3>
+<p><b>Dạng chuẩn 1 (1NF):</b> Phần lớn trường là nguyên tử; reaction, role, privacy và status là một giá trị. Tuy vậy <code>word_effects</code>, <code>approval_questions</code>, <code>activity_logs.details</code> lưu JSON/text và <code>rules</code> lưu nhiều dòng, là denormalization có chủ đích. Nếu cần truy vấn từng phần tử, nên tách thành bảng WordEffect, GroupRule, ApprovalQuestion.</p>
+<p><b>Dạng chuẩn 2 (2NF):</b> Các bảng liên kết dùng surrogate <code>id</code> và unique ghép; thuộc tính như role, nickname phụ thuộc toàn bộ cặp group–user. Không có phụ thuộc bộ phận đáng kể.</p>
+<p><b>Dạng chuẩn 3 (3NF):</b> Hồ sơ nằm ở users, nội dung ở posts/messages, tương tác ở bảng con. Tên/ảnh người dùng không được sao chép vào post, nhờ đó chỉnh profile không phải cập nhật hàng loạt. Notification.message và ActivityLog.description là snapshot có chủ đích để giữ nội dung lịch sử, chấp nhận lặp dữ liệu.</p>
+<p><b>Điểm cần cải thiện:</b> <code>posts.album_id</code> hiện chỉ là integer có index, chưa khai báo ForeignKey đến albums; entity_type/entity_id là polymorphic reference không bảo đảm toàn vẹn bằng DB; các status VARCHAR nên dùng enum/check constraint hoặc bảng danh mục; settings a/b của Conversation có thể chuyển thành ConversationMember để mở rộng sạch hơn.</p>
+
+<h3>4.1.6. Index và tối ưu truy vấn</h3>
+<p>Index đơn hiện đã đặt trên các cột lọc phổ biến: users.email/username; posts.author_id/created_at; messages.conversation_id; notifications.user_id/is_read/created_at; activity_logs user/category/action/time; group post group/status/pinned/time. Tuy nhiên index đơn không luôn tối ưu truy vấn nhiều điều kiện và ORDER BY.</p>
+<table><tr><th>Truy vấn thường gặp</th><th>Index ghép đề xuất</th><th>Lý do</th></tr><tr><td>Lịch sử chat theo conversation, thời gian/ID</td><td>messages(conversation_id, created_at, id)</td><td>Filter và sort/pagination cùng index.</td></tr><tr><td>Unread chat cá nhân</td><td>messages(conversation_id, is_read, sender_id, created_at)</td><td>Giảm scan khi đếm chưa đọc.</td></tr><tr><td>Feed theo tác giả/thời gian</td><td>posts(author_id, created_at DESC)</td><td>Profile timeline và feed.</td></tr><tr><td>Notification chưa đọc mới nhất</td><td>notifications(user_id, is_read, created_at DESC)</td><td>Badge và dropdown.</td></tr><tr><td>Activity theo category/time</td><td>activity_logs(user_id, category, created_at DESC)</td><td>Bộ lọc nhật ký.</td></tr><tr><td>Group feed đã publish</td><td>group_posts(group_id, status, is_pinned, created_at DESC)</td><td>Discussion và Featured.</td></tr><tr><td>Yêu cầu tham gia chờ duyệt</td><td>group_join_requests(group_id, status, created_at)</td><td>Admin queue.</td></tr><tr><td>Tin tự xóa đến hạn</td><td>messages(expires_at)</td><td>Worker xóa theo range.</td></tr></table>
+<p>Cần dùng <code>EXPLAIN ANALYZE</code> trên dữ liệu gần thực tế trước khi thêm index, vì mỗi index làm tăng chi phí INSERT/UPDATE và dung lượng. Feed/chat nên chuyển từ LIMIT cố định sang cursor pagination theo cặp <code>(created_at,id)</code>. SQLAlchemy nên dùng selectinload/joinedload để tránh N+1 khi serialize author, reaction, comments và members. Cache Redis phù hợp với profile summary, unread counters và group metadata nhưng phải có chiến lược invalidation.</p>
+
+<h3>4.1.7. Transaction, cascade và tính toàn vẹn</h3>
+<p>Mỗi dependency database cung cấp một SQLAlchemy Session. Các thao tác nhiều bước cần nằm trong cùng transaction: tạo album media + post; chấp nhận relationship và cập nhật hai user; tạo group + owner membership; gửi message + notification. Chỉ commit sau khi mọi kiểm tra quyền và dữ liệu thành công; exception phải rollback.</p>
+<table><tr><th>Chính sách</th><th>Ví dụ</th><th>Đánh giá</th></tr><tr><td>CASCADE</td><td>Xóa post → likes/comments; xóa group → members/posts/reports</td><td>Đúng cho dữ liệu con không còn ý nghĩa độc lập.</td></tr><tr><td>SET NULL</td><td>relationship partner, activity target, reply/forward source</td><td>Giữ lịch sử hoặc bản ghi đích nhưng bỏ tham chiếu.</td></tr><tr><td>ORM delete-orphan</td><td>User.posts, Post.comments, Post.likes</td><td>Đồng bộ vòng đời object ở ORM; cần nhất quán với FK DB.</td></tr><tr><td>Unique</td><td>Reaction, membership, vote</td><td>Chống race condition; API cần bắt IntegrityError và trả 409.</td></tr><tr><td>Application validation</td><td>Reply phải cùng conversation, partner phải là friend</td><td>Quy tắc liên bảng phức tạp không thể chỉ dựa FK.</td></tr></table>
+<p>Đối với xóa album đồng bộ timeline, cần transaction bao trùm xóa media, post và tệp vật lý. Vì filesystem không cùng transaction với MySQL, giải pháp tốt là outbox/cleanup job: commit trạng thái xóa trong DB rồi worker xóa object; nếu thất bại có thể retry. Mức isolation mặc định MySQL InnoDB thường là REPEATABLE READ; các workflow cạnh tranh nên dùng row lock hoặc optimistic version để ngăn hai admin xử lý cùng request.</p>
+
+<h3>4.1.8. Backup, migration và bảo mật database</h3>
+<p><b>Backup.</b> Named volume không phải bản sao lưu. Cần lịch full backup bằng <code>mysqldump --single-transaction</code> hoặc physical backup, kết hợp binary log để Point-in-Time Recovery. Media volume phải backup cùng mốc logic với database. Bản sao lưu cần mã hóa, lưu ngoài máy chủ, quy định retention và kiểm tra phục hồi định kỳ theo nguyên tắc 3-2-1.</p>
+<pre># Ví dụ backup logic nhất quán
+mysqldump --single-transaction --routines --triggers \
+  -u socialn -p socialn | gzip > socialn_YYYYMMDD.sql.gz
+
+# Khôi phục thử nghiệm vào database riêng
+gunzip -c socialn_YYYYMMDD.sql.gz | mysql -u socialn_restore -p socialn_restore</pre>
+<p><b>Migration.</b> Hiện backend gọi <code>create_all</code> và chạy các ALTER TABLE trong try/except khi startup. Cách này không có version, downgrade, checksum hay lịch sử deploy. Cần đưa vào Alembic: tạo revision, review SQL, backup trước migration phá vỡ, chạy expand–migrate–contract để zero downtime và tách migration khỏi vòng đời khởi động web server.</p>
+<p><b>Bảo mật.</b> User ứng dụng MySQL chỉ được SELECT/INSERT/UPDATE/DELETE trên schema SocialN, không dùng root. Mật khẩu nằm trong secret manager hoặc Docker secret; bật TLS giữa app–DB nếu qua mạng; không expose 3306 ra Internet. Bật audit/slow query log theo chính sách, mã hóa ổ đĩa và backup, rotate credential, giới hạn kết nối, patch MySQL định kỳ. Dữ liệu nhạy cảm như password_hash, IP, user-agent cần hạn chế truy cập và retention.</p>
+<table><tr><th>Mục tiêu</th><th>Đề xuất</th><th>Tần suất/RPO-RTO mẫu</th></tr><tr><td>Backup full</td><td>Snapshot/physical hoặc mysqldump nhất quán</td><td>Hằng ngày; giữ 30 ngày</td></tr><tr><td>Incremental/PITR</td><td>Binary log lưu ngoài máy DB</td><td>RPO 5–15 phút</td></tr><tr><td>Restore drill</td><td>Khôi phục staging và chạy integrity checks</td><td>Hằng tháng/quý</td></tr><tr><td>Schema migration</td><td>Alembic + CI review + backup</td><td>Mỗi release</td></tr><tr><td>Credential rotation</td><td>Secret manager, user ít quyền</td><td>90 ngày hoặc khi nghi lộ</td></tr><tr><td>Monitoring</td><td>Connections, locks, replication lag, disk, slow query</td><td>Liên tục + cảnh báo</td></tr></table>
+
+<h3>4.1.9. Kết luận thiết kế database</h3>
+<p>Mô hình hiện tại đã phân tách tốt các miền chính và dùng bảng liên kết/unique constraint phù hợp cho reaction, membership và vote. Điểm mạnh là không lưu binary trong MySQL, có cascade rõ ràng và nhiều index cơ bản. Điểm cần ưu tiên là xác nhận lại số bảng, bổ sung FK cho posts.album_id, unique cặp Conversation, composite indexes theo workload, response schema/eager loading và thay migration startup bằng Alembic. Khi triển khai production, backup có kiểm chứng phục hồi và quyền database tối thiểu là bắt buộc.</p>
+<h2>4.2. Luồng đăng nhập</h2>
+<div class="figure">Người dùng → Form đăng nhập → POST /api/auth/login
+→ Backend xác minh hash mật khẩu
+→ Phát JWT có thời hạn
+→ Frontend lưu token
+→ Gửi Authorization: Bearer &lt;token&gt;
+→ Dependency get_current_user xác định User</div>
+<p>Mật khẩu không lưu dạng rõ mà được băm. JWT giúp backend không cần lưu session server-side, phù hợp mô hình demo một token. Tuy nhiên access token dài hạn lưu ở trình duyệt vẫn có rủi ro khi xảy ra XSS; production nên dùng access token ngắn hạn và refresh token rotation trong cookie HttpOnly.</p>
+<h2>4.3. Luồng hiển thị bài viết</h2>
+<p>Backend lấy bài viết, kiểm tra block và privacy, sau đó serialize tác giả, reaction, bình luận, shared post và media. Frontend nhận JSON, render <code>PostCard</code>, cập nhật cục bộ sau reaction/comment và nhận notification liên quan. Quyền <code>friends</code> dựa vào Friendship accepted; <code>only_me</code> chỉ cho tác giả.</p>
+<h2>4.4. Luồng chat thời gian thực</h2>
+<div class="figure">A nhập tin → REST POST lưu Message vào MySQL
+                     ├→ serialize + trả kết quả cho A
+                     ├→ WebSocket gửi sự kiện đến B
+                     └→ tạo Notification / badge
+B nhận sự kiện → merge theo message.id → cuộn cuối → cập nhật conversation list
+Nếu WebSocket lỗi → polling định kỳ tải lịch sử làm phương án dự phòng</div>
+<p>Chat cá nhân dùng một Conversation chuẩn hóa cặp user theo ID nhỏ/lớn. Chat group dùng một Conversation làm kênh chứa Message và bảng ChatGroupMember quản lý thành viên. Trạng thái đã đọc của group được lưu theo từng membership bằng <code>last_read_at</code>, tránh việc một người mở chat làm mất unread của người khác. Chat 1–1 có các cột trạng thái theo phía a/b cho pin, archive, clear, mute và restrict.</p>
+<h2>4.5. Tin nhắn tự xóa</h2>
+<p>Conversation lưu số giây tự xóa. Khi người nhận đọc một tin mới, backend đặt <code>expires_at</code>; lần truy cập sau xóa các message hết hạn. Cách này đơn giản nhưng là cơ chế “lazy cleanup”: nếu không ai mở cuộc trò chuyện, bản ghi hết hạn vẫn tồn tại. Production nên dùng scheduler/worker xóa chủ động và chính sách xử lý attachment tương ứng.</p>
+<h2>4.6. Media</h2>
+<p>Frontend gửi multipart; backend xác thực loại và kích thước ở tầng ứng dụng, tạo tên tệp riêng và lưu vào volume. Database chỉ lưu URL, MIME và tên gốc. GIPHY được gọi qua backend để tránh lộ API key trong bundle frontend. Việc cho phép file chat đến 2 GB cần đồng bộ timeout/body limit tại proxy, hạ tầng và dung lượng volume.</p>
+
+<h1>CHƯƠNG 5. CÁC THÀNH PHẦN CHỨC NĂNG</h1>
+<h2>5.1. Authentication và Settings</h2><p>Trang đăng nhập/đăng ký có lựa chọn ngôn ngữ. Sau xác thực, Settings quản lý giao diện, ngôn ngữ, múi giờ, username và mật khẩu. Thay đổi quan trọng dùng hộp thoại xác nhận tùy chỉnh. Light/dark theme được lưu trên trình duyệt; múi giờ được áp dụng bởi hàm định dạng chung.</p>
+<h2>5.2. Hồ sơ người dùng</h2><p>Profile hiển thị cover, avatar, tên, username, quê quán, giới tính, ngày sinh, tình trạng quan hệ, album và timeline. Người sở hữu có thể chỉnh thông tin, cắt avatar, kéo ảnh bìa, xóa ảnh và tạo post hệ thống. Đại từ his/her/their được chọn theo giới tính.</p>
+<h2>5.3. Relationship workflow</h2><p>Các trạng thái Single, In a relationship, Engaged, Married, In a civil union, In a domestic partnership, In an open relationship, It’s complicated, Separated, Divorced và Widowed được mô hình hóa. Trạng thái cần partner chỉ tìm trong friends. Bên đề nghị thấy pending; bên được gắn nhận notification và có quyền accept/decline. Việc một bên hủy không gửi notification; phía còn lại giữ trạng thái nhưng bỏ “with partner”, phù hợp yêu cầu nghiệp vụ đã xác định.</p>
+<h2>5.4. Feed, reaction và notification</h2><p>Composer hỗ trợ text, ảnh, sticker nội tuyến và GIF. Sticker được coi gần như ký tự trong trải nghiệm nhập liệu, có thể đặt xen giữa text. PostCard có menu, thống kê reaction/comment và nút share. Khi tương tác, backend tạo notification phù hợp và frontend cập nhật badge ở biểu tượng chuông.</p>
+<h2>5.5. Album</h2><p>Ba album hệ thống nhận media từ đúng luồng: Profile pictures, Cover photos và Timeline photos. Album tự tạo có mô tả, privacy và media tùy ý. Xóa album xóa media và bài timeline liên quan; xóa post ảnh hệ thống đồng bộ album. Media viewer có cuộn và preview video.</p>
+<h2>5.6. Friends</h2><p>Trang Friends có request nhận, request đã gửi, danh sách bạn và gợi ý. Người dùng thu hồi lời mời gửi. Toàn bộ nhãn cần đi qua i18n; đây là khu vực từng phát sinh chuỗi tiếng Anh còn sót và cần quy trình kiểm tra bản dịch.</p>
+<h2>5.7. Chat cá nhân</h2>
+<ul><li>Personal storage cố định đầu danh sách; các chat còn lại trộn group/1–1 và sắp theo tin mới nhất.</li><li>Unread count và khung sáng cho đến khi mở.</li><li>Text, sticker, GIF, ảnh, video, file, voice; preview và download.</li><li>Reply, forward, pin, unsend, reaction và typing/presence.</li><li>Panel (i): theme, quick reaction, nickname, word effect, disappearing messages, mute, search, media/files, profile, restrict và block.</li></ul>
+<h2>5.8. Chat nhóm</h2><p>Người tạo group chat là admin. Nhóm chỉ được kích hoạt khi gửi tin đầu tiên. Admin quản lý thành viên, role, approval, link mời và customization. Thành viên có mention @username/@all, poll, reaction, reply, file/media. Group settings cập nhật tức thời và đóng panel sau khi lưu.</p>
+<h2>5.9. Groups cộng đồng</h2><p>Khác với chat group, Groups là không gian nội dung lâu dài. Trang chi tiết có About, Discussion, Featured, People, Media và Files. Public group cho phép share; private group giới hạn content/members. Admin thay cover, thêm/kick/ban thành viên, cấp moderator/admin, pin/xóa/khóa nội dung và điều chỉnh thiết lập. Thành viên có quyền đăng/tương tác/báo cáo theo chính sách nhóm.</p>
+<h2>5.10. Activity Log</h2><p>Nhật ký là trang riêng tư lưu reaction, comment, share, post, thay avatar/cover, quan hệ bạn bè, tìm kiếm và đăng nhập. Dữ liệu có bộ lọc theo nhóm hoạt động. Thành phần này hữu ích cho minh bạch tài khoản và là nền tảng cho audit/security.</p>
+
+<h1>CHƯƠNG 6. PHÂN TÍCH MÃ NGUỒN</h1>
+<h2>6.1. Cấu trúc thư mục</h2>
+<pre>socialn/
+├── backend/app/
+│   ├── main.py, models.py, schemas.py
+│   ├── auth.py, database.py, config.py
+│   └── routes/{auth,users,friends,posts,albums,chat,
+│              groups,notifications,activity,upload,giphy}.py
+├── frontend/src/{main.jsx,styles.css,i18n.js}
+├── postman/SocialN.postman_collection.json
+├── docs/architecture.md
+├── docker-compose.yml
+└── README.md</pre>
+<h2>6.2. Backend route layer</h2><p>Mỗi router dùng prefix và dependency injection của FastAPI. Ví dụ chat dùng <code>Depends(get_db)</code> và <code>Depends(get_current_user)</code>, sau đó kiểm tra target, block, membership hoặc role. Mô hình này rõ ràng và dễ ánh xạ với Swagger. Điểm hạn chế là nhiều nghiệp vụ nằm trực tiếp trong route function; chưa có service/repository layer nên route chat gần 1.000 dòng.</p>
+<h2>6.3. Model và migration</h2><p><code>models.py</code> tập trung khai báo ORM. Khi startup, <code>Base.metadata.create_all</code> tạo bảng mới, sau đó <code>ensure_profile_columns()</code> chạy danh sách <code>ALTER TABLE</code> trong try/except để tương thích database cũ. Cách này tiện trong phát triển nhanh nhưng không theo dõi version, không rollback và có thể che giấu lỗi migration. Alembic là thay đổi ưu tiên cao.</p>
+<h2>6.4. Serialization</h2><p>Dữ liệu response phần lớn được ghép thành dictionary thủ công. Chat có <code>serialize_message</code>, group có hàm serializer riêng. Cách làm kiểm soát được field trả về nhưng dễ phát sinh khác biệt giữa các endpoint. Nên xây dựng Pydantic response schema và serializer/service dùng chung.</p>
+<h2>6.5. Frontend state</h2><p>Component App quản lý route, user, feed, target chat, conversations, notifications và các modal. Chat quản lý nhiều state cho WebSocket, typing, GIF, sticker, reply, forward, poll và settings. Cách này hoạt động nhưng tạo component lớn. Việc tách thành hooks như <code>useChatSocket</code>, <code>useConversation</code>, <code>useMediaUpload</code> và context/query cache sẽ giảm độ phức tạp.</p>
+<h2>6.6. Cơ chế realtime</h2><p>ConnectionManager giữ map user ID đến tập WebSocket trong bộ nhớ tiến trình. Nó phù hợp một backend instance. Nếu chạy nhiều instance, socket của hai người có thể nằm ở hai process khác nhau và không nhìn thấy nhau; Redis Pub/Sub hoặc message broker là cần thiết.</p>
+<h2>6.7. Xử lý lỗi</h2><p>Frontend có Error Boundary để tránh trang trắng. API helper chuẩn hóa lỗi JSON, trong khi nhiều thao tác vẫn dùng alert ở một số luồng. Backend dùng HTTPException với status phù hợp. Cần bổ sung logging có cấu trúc, correlation ID và error monitoring để tìm lỗi production.</p>
+<h2>6.8. Nhận xét định lượng</h2>
+<table><tr><th>Hạng mục</th><th>Quy mô khảo sát</th><th>Nhận xét</th></tr><tr><td>Toàn bộ file mã chính đã thống kê</td><td>Khoảng 4.914 dòng</td><td>Phạm vi khá lớn cho đồ án cá nhân</td></tr><tr><td>Frontend main.jsx</td><td>Khoảng 1.290 dòng</td><td>Cần chia module</td></tr><tr><td>Backend chat.py</td><td>Khoảng 970 dòng</td><td>Miền nghiệp vụ phức tạp nhất</td></tr><tr><td>ORM models</td><td>29 class</td><td>Bao phủ nhiều miền dữ liệu</td></tr><tr><td>API/WebSocket decorators</td><td>Hơn 100</td><td>Cần test tự động và versioning</td></tr></table>
+
+<h1>CHƯƠNG 7. KIỂM THỬ VÀ VẬN HÀNH</h1>
+<h2>7.1. Kiểm thử hiện có</h2><p>Dự án cung cấp Swagger/ReDoc và Postman collection, thuận lợi cho thử API thủ công. Docker build và health endpoint kiểm tra khả năng khởi động. Trong quá trình phát triển, frontend được kiểm tra qua Vite transform và các luồng trực tiếp trên trình duyệt.</p>
+<h2>7.2. Kịch bản kiểm thử đề xuất</h2>
+<table><tr><th>ID</th><th>Kịch bản</th><th>Kết quả mong đợi</th></tr><tr><td>AUTH-01</td><td>Đăng nhập sai mật khẩu</td><td>401, không phát token</td></tr><tr><td>POST-01</td><td>Xem bài friends khi chưa kết bạn</td><td>Không trả bài</td></tr><tr><td>CHAT-01</td><td>B gửi A tin mới</td><td>Chat B lên đầu dưới storage, sáng và có badge</td></tr><tr><td>CHAT-02</td><td>@all trong group chat</td><td>Chỉ group nhận; chat 1–1 không typing/nội dung</td></tr><tr><td>CHAT-03</td><td>Tin tự xóa 10 giây sau đọc</td><td>Đặt expires_at và biến mất đúng chính sách</td></tr><tr><td>GROUP-01</td><td>Member xóa bài người khác</td><td>403</td></tr><tr><td>ALBUM-01</td><td>Xóa media album</td><td>Album, timeline photos và post đồng bộ</td></tr><tr><td>I18N-01</td><td>Chọn Tiếng Việt</td><td>Không còn nhãn tiếng Anh ở luồng đã hỗ trợ</td></tr></table>
+<h2>7.3. Chiến lược tự động hóa</h2><ul><li>Backend: pytest, TestClient, database test riêng; unit test service và integration test route.</li><li>Frontend: Vitest + React Testing Library cho component; Playwright cho đăng nhập, post, chat, group.</li><li>Contract test: xác minh OpenAPI và response schema.</li><li>Load test: Locust/k6 cho feed, upload và WebSocket concurrency.</li><li>Security test: dependency scan, SAST, kiểm tra MIME, path traversal, JWT và authorization.</li></ul>
+<h2>7.4. Vận hành</h2><p>Lệnh khuyến nghị là <code>docker compose up -d --build</code>. Health check API ở <code>/health</code>. Người vận hành cần theo dõi dung lượng hai volume, log database/backend, timeout upload, trạng thái GIPHY key và port mapping. Không dùng <code>docker compose down -v</code> nếu chưa sao lưu vì lệnh này xóa database và media.</p>
+
+<h1>CHƯƠNG 8. ƯU ĐIỂM, HẠN CHẾ VÀ RỦI RO</h1>
+<h2>8.1. Ưu điểm</h2>
+<table class="good"><tr><th>Ưu điểm</th><th>Phân tích</th></tr><tr><td>Phạm vi chức năng rộng</td><td>Không chỉ CRUD bài viết mà có album đồng bộ, group, chat group, relationship workflow, activity log.</td></tr><tr><td>Trải nghiệm tương đối hoàn chỉnh</td><td>Responsive, hamburger, light/dark, modal, preview media, unread, presence, typing.</td></tr><tr><td>Realtime có fallback</td><td>WebSocket cho tốc độ; polling giảm nguy cơ bỏ lỡ do proxy/socket lỗi.</td></tr><tr><td>Phân quyền theo miền</td><td>Privacy post, block, friendship, membership và group role được kiểm tra phía server.</td></tr><tr><td>Dễ chạy</td><td>Ba container và named volume tạo môi trường tái lập.</td></tr><tr><td>Tích hợp bên ngoài hợp lý</td><td>GIPHY key ở backend, không lộ qua biến VITE.</td></tr><tr><td>Có nền tảng audit</td><td>Activity log lưu hoạt động và đăng nhập.</td></tr></table>
+<h2>8.2. Nhược điểm tồn tại</h2>
+<table class="bad"><tr><th>Hạn chế</th><th>Tác động</th><th>Mức độ</th></tr><tr><td>main.jsx và chat.py quá lớn</td><td>Khó bảo trì, review, test và tránh regression</td><td>Cao</td></tr><tr><td>Migration thủ công khi startup</td><td>Không version/rollback; có thể che lỗi schema</td><td>Cao</td></tr><tr><td>Ít test tự động</td><td>Thay đổi UI/chat dễ làm hỏng luồng cũ</td><td>Cao</td></tr><tr><td>JWT/session đơn giản</td><td>Thiếu refresh rotation, revoke, device session</td><td>Cao</td></tr><tr><td>WebSocket in-memory</td><td>Không scale nhiều backend instance</td><td>Trung bình–cao</td></tr><tr><td>Upload local và giới hạn lớn</td><td>Rủi ro đầy đĩa, malware, timeout, backup khó</td><td>Cao</td></tr><tr><td>Query có nguy cơ N+1</td><td>Feed/group/chat chậm khi dữ liệu tăng</td><td>Trung bình</td></tr><tr><td>Pagination chưa đồng nhất</td><td>Response lớn và tải chậm</td><td>Trung bình</td></tr><tr><td>i18n chưa bao phủ toàn bộ</td><td>Trộn ngôn ngữ trong giao diện</td><td>Trung bình</td></tr><tr><td>Disappearing message lazy cleanup</td><td>Dữ liệu hết hạn chưa xóa nếu không truy cập</td><td>Trung bình</td></tr></table>
+<h2>8.3. Rủi ro bảo mật</h2>
+<ul><li>Không nên dùng JWT secret mặc định; production phải dùng secret dài, xoay khóa và quản lý biến môi trường an toàn.</li><li>Cần rate limiting cho login, search, upload, reactions và WebSocket.</li><li>Upload cần kiểm tra magic bytes, quét malware, đổi tên an toàn và giới hạn theo quota người dùng.</li><li>Nội dung người dùng cần chống XSS; React escape text mặc định nhưng URL/media và HTML tương lai phải được kiểm soát.</li><li>Cần rà soát IDOR cho mọi endpoint nhận user_id, post_id, album_id, group_id và message_id.</li><li>CORS chỉ cho origin tin cậy; triển khai bắt buộc HTTPS/WSS.</li><li>GIPHY API key từng được cung cấp trực tiếp trong quá trình phát triển nên nên xoay key trước khi public repository.</li></ul>
+<h2>8.4. Hạn chế sản phẩm</h2><p>Hệ thống chưa có email verification, khôi phục mật khẩu, 2FA, quản lý session, moderation tự động hoàn chỉnh, message encryption end-to-end, gọi thoại/video, accessibility audit và công cụ quản trị toàn hệ thống. Restrict mới có trạng thái cài đặt nhưng để giống Messenger hoàn chỉnh cần Message Requests riêng, ẩn read receipt/presence hai chiều và luồng bỏ hạn chế.</p>
+
+<h1>CHƯƠNG 9. HƯỚNG CẢI THIỆN VÀ LỘ TRÌNH</h1>
+<h2>9.1. Giai đoạn 1 – Ổn định mã nguồn</h2>
+<ol><li>Chia frontend theo feature: auth, feed, profile, friends, messaging, groups, settings; mỗi feature có component, hook và API module.</li><li>Tách backend thành router–service–repository; giữ route mỏng và gom serializer.</li><li>Đưa schema sang Alembic; tạo baseline và migration theo phiên bản.</li><li>Thiết lập formatter/linter: Ruff/Black cho Python, ESLint/Prettier cho React.</li><li>Viết test cho auth, privacy, relationship, unread, group permissions và album synchronization.</li></ol>
+<h2>9.2. Giai đoạn 2 – Bảo mật và dữ liệu</h2>
+<ol><li>Access token ngắn hạn, refresh token rotation, revoke list và trang quản lý thiết bị.</li><li>Email verification, reset password, 2FA tùy chọn.</li><li>Rate limit với Redis; audit event không thể chỉnh sửa tùy tiện.</li><li>Object storage S3/MinIO, signed URL, thumbnail/transcode worker, antivirus và quota.</li><li>Cursor pagination, index theo truy vấn và eager loading để giảm N+1.</li></ol>
+<h2>9.3. Giai đoạn 3 – Realtime quy mô lớn</h2>
+<ol><li>Redis Pub/Sub hoặc NATS/Kafka để đồng bộ WebSocket giữa nhiều instance.</li><li>Presence có TTL trong Redis; typing event theo conversation ID với debounce.</li><li>Background worker Celery/RQ/Arq cho notification, xóa message hết hạn, media processing.</li><li>Delivery/read receipt theo từng user và thiết bị; retry/idempotency key khi gửi tin.</li><li>Nghiên cứu E2EE cho chat cá nhân: quản lý khóa thiết bị, forward secrecy, backup/recovery; phân biệt rõ mã hóa đường truyền TLS và mã hóa đầu cuối.</li></ol>
+<h2>9.4. Giai đoạn 4 – Chất lượng sản phẩm</h2>
+<ol><li>Hoàn thành i18n bằng key thay vì chuỗi hard-code, có test snapshot cho 6 ngôn ngữ.</li><li>WCAG: keyboard navigation, focus trap, aria label, contrast và screen reader.</li><li>Notification preferences chi tiết; Message Requests cho restrict.</li><li>Search full-text cho user/post/message/group, có quyền lọc.</li><li>Admin dashboard, report queue, content policy và appeal workflow.</li></ol>
+<h2>9.5. Kiến trúc đích đề xuất</h2>
+<div class="figure">CDN / Reverse Proxy / TLS
+       │
+React static assets ────────────── Object Storage + Image CDN
+       │ REST/WSS
+API Gateway / Rate Limit
+       │
+FastAPI instances ── Redis (cache, presence, pub/sub)
+       │                    │
+MySQL primary/replica       └── Worker queue
+       │                         ├ media processing
+Backup + PITR                   ├ notifications
+                                └ expiry/moderation</div>
+<h2>9.6. Thứ tự ưu tiên</h2>
+<table><tr><th>Ưu tiên</th><th>Công việc</th><th>Lợi ích</th></tr><tr><td>P0</td><td>Alembic, test authorization, secret rotation, upload security</td><td>Ngăn mất dữ liệu và lỗ hổng nghiêm trọng</td></tr><tr><td>P1</td><td>Chia module frontend/backend, pagination, indexes</td><td>Dễ bảo trì và cải thiện hiệu năng</td></tr><tr><td>P1</td><td>Refresh session, rate limit, object storage</td><td>Sẵn sàng public deployment</td></tr><tr><td>P2</td><td>Redis realtime, worker, message requests</td><td>Mở rộng và hoàn thiện chat</td></tr><tr><td>P3</td><td>E2EE, search nâng cao, recommendation</td><td>Tăng khác biệt sản phẩm</td></tr></table>
+
+<h1>KẾT LUẬN</h1>
+<p>SocialN đã đạt được mục tiêu xây dựng một mạng xã hội full-stack có phạm vi đáng kể. Dự án thể hiện khả năng kết hợp frontend React, backend FastAPI, ORM, MySQL, WebSocket, upload media, tích hợp API và Docker. Các luồng phức tạp như relationship confirmation, album–timeline synchronization, group roles, unread theo thành viên và tùy chỉnh chat cho thấy hệ thống vượt khỏi mức CRUD cơ bản.</p>
+<p>Giá trị lớn nhất của đồ án nằm ở tính tích hợp: mỗi chức năng không tồn tại riêng lẻ mà liên quan đến quyền riêng tư, notification, activity log và realtime UI. Mặt khác, sự tăng trưởng nhanh cũng khiến một số tệp trở nên lớn, migration và kiểm thử chưa đạt chuẩn production, hạ tầng realtime/upload mới phù hợp một instance.</p>
+<p>Nếu thực hiện lộ trình ưu tiên gồm tái cấu trúc module, Alembic, test tự động, củng cố bảo mật, object storage và Redis, SocialN có thể chuyển từ sản phẩm học tập giàu tính năng thành nền tảng có khả năng vận hành ổn định hơn. Đề tài đã giúp vận dụng tổng hợp kiến thức phân tích yêu cầu, thiết kế dữ liệu, lập trình web, bảo mật, giao tiếp thời gian thực và triển khai phần mềm.</p>
+
+<h1>TÀI LIỆU THAM KHẢO</h1>
+<ol><li>FastAPI Documentation, https://fastapi.tiangolo.com/.</li><li>SQLAlchemy 2.0 Documentation, https://docs.sqlalchemy.org/.</li><li>React Documentation, https://react.dev/.</li><li>Vite Documentation, https://vite.dev/.</li><li>MySQL 8.4 Reference Manual, https://dev.mysql.com/doc/.</li><li>Docker Compose Documentation, https://docs.docker.com/compose/.</li><li>OWASP Application Security Verification Standard và OWASP Top 10.</li><li>GIPHY API Documentation, https://developers.giphy.com/docs/api/.</li><li>Mã nguồn và README của dự án SocialN, phiên bản khảo sát tháng 8/2026.</li></ol>
+
+<h1>PHỤ LỤC A. HƯỚNG DẪN CHẠY</h1>
+<pre>cd socialn
+cp .env.example .env
+# Cập nhật JWT_SECRET, mật khẩu MySQL và GIPHY_API_KEY
+docker compose up -d --build
+
+Frontend: http://localhost:5173
+Swagger:  http://localhost:8000/docs
+Health:   http://localhost:8000/health</pre>
+<p class="note"><b>Cảnh báo:</b> không commit tệp <code>.env</code>. Không chạy <code>docker compose down -v</code> khi chưa sao lưu vì dữ liệu MySQL và uploads sẽ bị xóa.</p>
+
+<h1>PHỤ LỤC B. CHECKLIST NGHIỆM THU</h1>
+<table><tr><th>Nhóm</th><th>Tiêu chí</th><th>Trạng thái</th></tr><tr><td>Khởi động</td><td>Ba container up; DB healthy; /health trả OK</td><td>□</td></tr><tr><td>Auth</td><td>Register/login/logout/đổi mật khẩu</td><td>□</td></tr><tr><td>Feed</td><td>Post/privacy/reaction/comment/share</td><td>□</td></tr><tr><td>Profile</td><td>Edit/avatar/cover/relationship/album</td><td>□</td></tr><tr><td>Friends</td><td>Request/sent/withdraw/accept/unfriend/block</td><td>□</td></tr><tr><td>Chat</td><td>Realtime/unread/media/reply/reaction/settings</td><td>□</td></tr><tr><td>Groups</td><td>Privacy/member/role/post/moderation/media</td><td>□</td></tr><tr><td>UI</td><td>Responsive/light-dark/i18n/timezone</td><td>□</td></tr><tr><td>Security</td><td>Authorization/upload/JWT/rate-limit review</td><td>□</td></tr></table>
+
+<div class="signature"><div><b>GIẢNG VIÊN HƯỚNG DẪN</b><br><i>(Ký và ghi rõ họ tên)</i></div><div><b>SINH VIÊN THỰC HIỆN</b><br><i>(Ký và ghi rõ họ tên)</i></div></div>
+</body></html>

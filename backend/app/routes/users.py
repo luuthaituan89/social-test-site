@@ -273,6 +273,18 @@ def search(q: str, db: Session = Depends(get_db), user: User = Depends(get_curre
     return results
 
 
+@router.get("/me/blocked")
+def blocked_users(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(Block).filter(Block.blocker_id == user.id).order_by(Block.created_at.desc()).all()
+    result = []
+    for row in rows:
+        target = db.get(User, row.blocked_id)
+        if target:
+            result.append({"id": target.id, "name": target.name, "username": target.username,
+                           "avatar_url": target.avatar_url, "blocked_at": row.created_at})
+    return result
+
+
 @router.post("/{target_id}/block")
 def block_user(target_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     if target_id == user.id or not db.get(User, target_id):

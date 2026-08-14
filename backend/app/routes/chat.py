@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
+from sqlalchemy.exc import IntegrityError
 from jose import jwt, JWTError
 from pathlib import Path
 import uuid
@@ -62,15 +63,19 @@ def blocked_between(db: Session, a: int, b: int) -> bool:
 
 def get_or_create_conversation(db: Session, a: int, b: int) -> Conversation:
     low, high = sorted((a, b))
-    conv = db.query(Conversation).filter(
-        Conversation.user_a_id == low,
-        Conversation.user_b_id == high,
-    ).first()
+    key = f"{low}:{high}"
+    conv = db.query(Conversation).filter(Conversation.direct_key == key).first()
 
     if not conv:
-        conv = Conversation(user_a_id=low, user_b_id=high)
-        db.add(conv)
-        db.flush()
+        try:
+            with db.begin_nested():
+                conv = Conversation(user_a_id=low, user_b_id=high, direct_key=key)
+                db.add(conv)
+                db.flush()
+        except IntegrityError:
+            conv = db.query(Conversation).filter(Conversation.direct_key == key).first()
+            if not conv:
+                raise
 
     return conv
 
@@ -661,6 +666,33 @@ def clear_conversation(conversation_id: int, db: Session = Depends(get_db), user
         ).update({Message.is_read: True}, synchronize_session=False)
     db.commit()
     return {"message": "Conversation removed"}
+
+
+@router.get("/restricted")
+def restricted_conversations(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(Conversation).filter(or_(
+        and_(Conversation.user_a_id == user.id, Conversation.restricted_a == True),
+        and_(Conversation.user_b_id == user.id, Conversation.restricted_b == True),
+    )).all()
+    result = []
+    for conv in rows:
+        other_id = conv.user_b_id if conv.user_a_id == user.id else conv.user_a_id
+        other = db.get(User, other_id)
+        if other:
+            result.append({"id": other.id, "name": other.name, "username": other.username,
+                           "avatar_url": other.avatar_url,
+                           "restricted_at": conv.created_at})
+    return result
+
+
+@router.delete("/restricted/{other_user_id}")
+def unrestrict_conversation(other_user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    low, high = sorted((user.id, other_user_id))
+    conv = db.query(Conversation).filter(Conversation.user_a_id == low, Conversation.user_b_id == high).first()
+    if not conv: raise HTTPException(404, "Conversation not found")
+    set_conversation_state(conv, user.id, "restricted", False)
+    db.commit()
+    return {"message": "Conversation unrestricted"}
 
 
 @router.get("/{other_user_id}/settings")

@@ -237,6 +237,7 @@ function Profile({data,me,reload,message,open}){
   const [imageEditor,setImageEditor]=useState(null);
   const [photoMenu,setPhotoMenu]=useState(null);
   const [contentVersion,setContentVersion]=useState(0);
+  const [profileActionMenu,setProfileActionMenu]=useState(false),[profileSearchOpen,setProfileSearchOpen]=useState(false),[profileSearch,setProfileSearch]=useState("");
 
   useEffect(()=>{
     setForm({
@@ -313,10 +314,10 @@ function Profile({data,me,reload,message,open}){
   }
 
   async function block(){
-    try{
-      await api(`/api/users/${user.id}/block`,{method:"POST"});
-      alert("User blocked");
-    }catch(e){alert(e.message)}
+    setProfileActionMenu(false);
+    if(!await confirmDialog({variant:"danger",title:`Block ${user.name}?`,message:`${user.name} will no longer be able to find your profile, message you or interact with your content.`,detail:"Blocking also removes the current friendship. You can unblock this person later in Settings.",confirmLabel:"Block",cancelLabel:"Cancel"}))return;
+    try{await api(`/api/users/${user.id}/block`,{method:"POST"});location.assign("/settings")}
+    catch(e){alert(e.message)}
   }
 
   return <>
@@ -352,7 +353,11 @@ function Profile({data,me,reload,message,open}){
                           : <><UserPlus size={17}/> Add friend</>}
                   </button>
                   <button className="secondary" onClick={()=>message(user)}><MessageCircle size={17}/> Message</button>
-                  <button className="danger" onClick={block}><ShieldBan size={17}/> Block</button>
+                  <div className="profile-more-wrap"><button className="secondary profile-more-trigger" aria-label="More profile actions" aria-expanded={profileActionMenu} onClick={()=>setProfileActionMenu(v=>!v)}><MoreHorizontal size={21}/></button>{profileActionMenu&&<div className="profile-action-menu">
+                    <button onClick={()=>{setProfileActionMenu(false);setProfileSearchOpen(true);setTimeout(()=>document.getElementById("profile-content-search")?.focus(),0)}}><Search size={17}/><span><b>Search profile</b><small>Find posts by this person</small></span></button>
+                    {data.relationship==="friends"&&<button onClick={()=>{setProfileActionMenu(false);setConfirmUnfriend(true)}}><UserCheck size={17}/><span><b>Unfriend</b><small>Remove {user.name} from your friends</small></span></button>}
+                    <button className="danger-menu-item" onClick={block}><ShieldBan size={17}/><span><b>Block</b><small>Stop contact and interaction</small></span></button>
+                  </div>}</div>
                 </>
             }
           </div>
@@ -440,7 +445,8 @@ function Profile({data,me,reload,message,open}){
     </div>
 
     <ProfileAlbums user={user} me={me} onProfileChanged={async()=>{setContentVersion(v=>v+1);await reload(user.id)}}/>
-    <ProfilePosts userId={user.id} me={me} open={open} refreshKey={`${user.avatar_url||""}-${user.cover_url||""}-${contentVersion}`}/>
+    {profileSearchOpen&&<div className="card profile-content-search"><Search size={19}/><input id="profile-content-search" value={profileSearch} onChange={e=>setProfileSearch(e.target.value)} placeholder={`Search ${user.name}'s posts...`}/>{profileSearch&&<button onClick={()=>setProfileSearch("")} aria-label="Clear search"><X size={17}/></button>}<button className="secondary" onClick={()=>{setProfileSearchOpen(false);setProfileSearch("")}}>Close</button></div>}
+    <ProfilePosts userId={user.id} me={me} open={open} query={profileSearchOpen?profileSearch:""} refreshKey={`${user.avatar_url||""}-${user.cover_url||""}-${contentVersion}`}/>
 
     {imageEditor&&<ImageEditor mode={imageEditor.kind} file={imageEditor.file} onCancel={()=>setImageEditor(null)} onSave={saveEditedImage}/>}
 
@@ -497,7 +503,7 @@ function formatRelationship(value){
 const RELATIONSHIP_WITH_PARTNER=new Set(["in_a_relationship","engaged","married","civil_union","domestic_partnership","open_relationship","complicated"]);
 function relationshipDateLabel(status){return status==="engaged"?"Engagement date (optional)":status==="married"?"Wedding / anniversary date (optional)":"Start date (optional)"}
 
-function ProfilePosts({userId,me,open,refreshKey}){
+function ProfilePosts({userId,me,open,refreshKey,query=""}){
   const[posts,setPosts]=useState([]);
 
   async function load(){
@@ -510,9 +516,11 @@ function ProfilePosts({userId,me,open,refreshKey}){
   useEffect(()=>{load()},[userId,refreshKey]);
 
   if(posts.length===0)return <div className="card empty profile-posts-empty">No visible posts.</div>;
+  const visible=query.trim()?posts.filter(post=>`${post.content||""} ${post.author?.name||""}`.toLowerCase().includes(query.trim().toLowerCase())):posts;
+  if(query.trim()&&!visible.length)return <div className="card empty profile-posts-empty">No posts match “{query.trim()}”.</div>;
 
   return <div className="profile-posts">
-    {posts.map(p=><PostCard key={p.id} post={p} me={me} onOpenProfile={open} onUpdated={updated=>setPosts(v=>v.map(x=>x.id===updated.id?updated:x))} onDeleted={id=>setPosts(v=>v.filter(x=>x.id!==id))}/>)}
+    {visible.map(p=><PostCard key={p.id} post={p} me={me} onOpenProfile={open} onUpdated={updated=>setPosts(v=>v.map(x=>x.id===updated.id?updated:x))} onDeleted={id=>setPosts(v=>v.filter(x=>x.id!==id))}/>)}
   </div>
 }
 
@@ -1032,15 +1040,30 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
   </div>
 }
 
-function SettingsPage({user,onUserUpdated,theme="dark",onThemeChange,language="en",onLanguageChange,timezone="auto",onTimezoneChange}){
+function SettingsPage({user,onUserUpdated,openProfile,theme="dark",onThemeChange,language="en",onLanguageChange,timezone="auto",onTimezoneChange}){
   const[f,setF]=useState({current_password:"",new_password:"",confirm_password:""}),[msg,setMsg]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
   const[username,setUsername]=useState(user.username||"");
   const[usernameStatus,setUsernameStatus]=useState(null);
   const[usernameMsg,setUsernameMsg]=useState("");
   const[usernameErr,setUsernameErr]=useState("");
   const[usernameBusy,setUsernameBusy]=useState(false);
+  const[blockedUsers,setBlockedUsers]=useState([]),[restrictedUsers,setRestrictedUsers]=useState([]),[privacyBusy,setPrivacyBusy]=useState(null),[privacyError,setPrivacyError]=useState("");
 
   useEffect(()=>{api("/api/users/me/username-status").then(setUsernameStatus).catch(e=>setUsernameErr(e.message))},[user.id]);
+  async function loadPrivacyLists(){
+    try{const[blocked,restricted]=await Promise.all([api("/api/users/me/blocked"),api("/api/chat/restricted")]);setBlockedUsers(Array.isArray(blocked)?blocked:[]);setRestrictedUsers(Array.isArray(restricted)?restricted:[]);setPrivacyError("")}
+    catch(e){setPrivacyError(e.message)}
+  }
+  useEffect(()=>{loadPrivacyLists()},[user.id]);
+
+  async function unblock(item){
+    if(!await confirmDialog({title:"Unblock this person?",message:`${item.name} will be able to find your profile and contact you again.`,confirmLabel:"Unblock",cancelLabel:"Keep blocked"}))return;
+    setPrivacyBusy(`block-${item.id}`);try{await api(`/api/users/${item.id}/block`,{method:"DELETE"});setBlockedUsers(rows=>rows.filter(row=>row.id!==item.id))}catch(e){setPrivacyError(e.message)}finally{setPrivacyBusy(null)}
+  }
+  async function unrestrict(item){
+    if(!await confirmDialog({title:"Remove restriction?",message:`Move ${item.name}'s conversation back to your regular messages?`,confirmLabel:"Unrestrict",cancelLabel:"Keep restricted"}))return;
+    setPrivacyBusy(`restrict-${item.id}`);try{await api(`/api/chat/restricted/${item.id}`,{method:"DELETE"});setRestrictedUsers(rows=>rows.filter(row=>row.id!==item.id))}catch(e){setPrivacyError(e.message)}finally{setPrivacyBusy(null)}
+  }
 
   async function confirmChange(title,message,detail){return confirmDialog({variant:"confirm",title,message,detail,confirmLabel:"Apply changes",cancelLabel:"Cancel"})}
   async function changeTheme(value){if(value===theme)return;if(await confirmChange("Change appearance?",`Switch SocialN to ${value==="light"?"Light":"Dark"} mode?`,"The new appearance will be saved on this browser."))onThemeChange?.(value)}
@@ -1100,6 +1123,17 @@ function SettingsPage({user,onUserUpdated,theme="dark",onThemeChange,language="e
       <p className="muted small">Apply this time zone to posts, notifications, activity history and all dates across SocialN.</p>
       <label>Time zone<select value={timezone} onChange={e=>changeTimezone(e.target.value)}>{TIMEZONES.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <div className="timezone-preview"><span>Current time</span><b>{formatDateTime(new Date().toISOString())}</b></div>
+    </div>
+    <div className="settings-section privacy-management">
+      <h3>Blocking &amp; restrictions</h3>
+      <p className="muted small">Review people you have blocked and conversations you have restricted.</p>
+      {privacyError&&<div className="error">{privacyError}</div>}
+      <div className="privacy-list-group"><div className="privacy-list-title"><span><ShieldBan size={19}/> Blocked people</span><b>{blockedUsers.length}</b></div>
+        {blockedUsers.length===0?<div className="muted privacy-empty">You haven't blocked anyone.</div>:blockedUsers.map(item=><div className="privacy-user-row" key={item.id}><button className="privacy-user-main" onClick={()=>openProfile?.(item.id)}><Avatar user={item} size={44}/><span><b>{item.name}</b><small>@{item.username}</small></span></button><button className="secondary" disabled={privacyBusy===`block-${item.id}`} onClick={()=>unblock(item)}>{privacyBusy===`block-${item.id}`?"Updating...":"Unblock"}</button></div>)}
+      </div>
+      <div className="privacy-list-group"><div className="privacy-list-title"><span><MessageCircle size={19}/> Restricted conversations</span><b>{restrictedUsers.length}</b></div>
+        {restrictedUsers.length===0?<div className="muted privacy-empty">You haven't restricted any conversations.</div>:restrictedUsers.map(item=><div className="privacy-user-row" key={item.id}><button className="privacy-user-main" onClick={()=>openProfile?.(item.id)}><Avatar user={item} size={44}/><span><b>{item.name}</b><small>@{item.username}</small></span></button><button className="secondary" disabled={privacyBusy===`restrict-${item.id}`} onClick={()=>unrestrict(item)}>{privacyBusy===`restrict-${item.id}`?"Updating...":"Unrestrict"}</button></div>)}
+      </div>
     </div>
     <div className="settings-section">
       <h3>Change username</h3>
@@ -1280,7 +1314,7 @@ function RoutedApp(){
         {view==="notifications"&&<div className="card notifications-page">{notifs.map(n=><button className="notification-row" key={n.id} onClick={()=>read(n)}>{n.message}</button>)}</div>}
         {view==="activity"&&<ActivityLogPage openProfile={openProfile}/>} 
         {view==="groups"&&<GroupsPage groupId={groupId} onOpen={id=>{setGroupId(id);go(`/groups/${id}`,"groups")}}/>}
-        {view==="settings"&&<SettingsPage user={user} onUserUpdated={setUser} theme={theme} onThemeChange={setTheme} language={language} onLanguageChange={setLanguage} timezone={timezone} onTimezoneChange={changeTimezone}/>}
+        {view==="settings"&&<SettingsPage user={user} onUserUpdated={setUser} openProfile={openProfile} theme={theme} onThemeChange={setTheme} language={language} onLanguageChange={setLanguage} timezone={timezone} onTimezoneChange={changeTimezone}/>}
         {view==="not_found"&&<div className="card empty"><h2>Page not found</h2><button className="primary" onClick={()=>go("/","home")}>Go home</button></div>}
       </main>
     </div>

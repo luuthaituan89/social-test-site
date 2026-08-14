@@ -25,6 +25,7 @@ def ensure_profile_columns():
         "ALTER TABLE conversations ADD COLUMN archived_b BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE conversations ADD COLUMN cleared_at_a DATETIME NULL",
         "ALTER TABLE conversations ADD COLUMN cleared_at_b DATETIME NULL",
+        "ALTER TABLE conversations ADD COLUMN direct_key VARCHAR(64) NULL UNIQUE",
         "ALTER TABLE conversations ADD COLUMN theme VARCHAR(40) NOT NULL DEFAULT 'default'",
         "ALTER TABLE conversations ADD COLUMN quick_reaction VARCHAR(20) NOT NULL DEFAULT '👍'",
         "ALTER TABLE conversations ADD COLUMN nickname_a VARCHAR(120) NULL",
@@ -76,6 +77,39 @@ def ensure_profile_columns():
 
 
 ensure_profile_columns()
+
+
+def normalize_direct_conversations():
+    """Merge legacy duplicate 1:1 conversations and assign a race-safe unique key.
+
+    Group chats intentionally keep direct_key NULL because several groups may have
+    the same creator pair in their backing Conversation rows.
+    """
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        rows = conn.execute(text("""
+            SELECT c.* FROM conversations c
+            LEFT JOIN chat_groups g ON g.conversation_id = c.id
+            WHERE g.id IS NULL
+            ORDER BY c.user_a_id, c.user_b_id, c.id
+        """)).mappings().all()
+        grouped = {}
+        for row in rows:
+            low, high = sorted((row["user_a_id"], row["user_b_id"]))
+            grouped.setdefault((low, high), []).append(row)
+        for (low, high), items in grouped.items():
+            canonical, duplicates = items[0], items[1:]
+            for duplicate in duplicates:
+                conn.execute(text("UPDATE messages SET conversation_id=:keep WHERE conversation_id=:old"), {"keep": canonical["id"], "old": duplicate["id"]})
+            if duplicates:
+                ids = [row["id"] for row in duplicates]
+                placeholders = ",".join(str(int(value)) for value in ids)
+                conn.execute(text(f"DELETE FROM conversations WHERE id IN ({placeholders})"))
+            conn.execute(text("UPDATE conversations SET user_a_id=:low,user_b_id=:high,direct_key=:key WHERE id=:id"),
+                         {"low": low, "high": high, "key": f"{low}:{high}", "id": canonical["id"]})
+
+
+normalize_direct_conversations()
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(

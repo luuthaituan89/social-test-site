@@ -122,6 +122,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    direct_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
     user_a_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     user_b_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
