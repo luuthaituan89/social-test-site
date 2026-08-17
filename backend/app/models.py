@@ -38,6 +38,7 @@ class User(Base):
     cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     username_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    active_status_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")

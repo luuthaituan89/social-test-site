@@ -19,6 +19,7 @@ def ensure_profile_columns():
         "ALTER TABLE users ADD COLUMN relationship_since DATE NULL",
         "ALTER TABLE users ADD COLUMN username_changed_at DATETIME NULL",
         "ALTER TABLE users ADD COLUMN last_seen_at DATETIME NULL",
+        "ALTER TABLE users ADD COLUMN active_status_enabled BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE conversations ADD COLUMN pinned_a BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE conversations ADD COLUMN pinned_b BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE conversations ADD COLUMN archived_a BOOLEAN NOT NULL DEFAULT FALSE",

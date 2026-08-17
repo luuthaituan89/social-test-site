@@ -16,6 +16,7 @@ from ..auth import get_current_user
 from ..config import settings
 from ..schemas import MessageCreate, ReactionIn, ChatGroupCreate, ChatGroupUpdate, ChatPollCreate, DirectChatUpdate
 from ..notifications import create_notification
+from ..utils import are_friends, has_restricted
 from .notifications import notification_ws
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
@@ -138,6 +139,7 @@ def conversation_state(conv: Conversation, user_id: int):
         "pinned": conv.pinned_a if side_a else conv.pinned_b,
         "archived": conv.archived_a if side_a else conv.archived_b,
         "cleared_at": conv.cleared_at_a if side_a else conv.cleared_at_b,
+        "restricted": conv.restricted_a if side_a else conv.restricted_b,
     }
 
 
@@ -227,8 +229,46 @@ def validate_message(data: MessageCreate):
     return content
 
 
+def notification_message_preview(msg: Message) -> str:
+    content = (msg.content or "").strip()
+    if content:
+        return content[:160]
+    labels = {
+        "image": "Photo", "video": "Video", "voice": "Voice message",
+        "gif": "GIF", "sticker": "Sticker", "poll": "Poll",
+    }
+    if msg.message_type == "file":
+        return (msg.attachment_name or "File")[:160]
+    return labels.get(msg.message_type, "New message")
+
+
+def message_notification_payload(msg: Message, sender: User, *, conversation_id: int,
+                                 group: ChatGroup | None = None, silent: bool = False) -> dict:
+    return {
+        "type": "message_notification",
+        "reason": "new_group_message" if group else "new_message",
+        "message_id": msg.id,
+        "conversation_id": conversation_id,
+        "group_chat_id": group.id if group else None,
+        "is_group": bool(group),
+        "conversation_name": group.name if group else sender.name,
+        "conversation_avatar_url": group.avatar_url if group else sender.avatar_url,
+        "actor": {"id": sender.id, "name": sender.name, "username": sender.username,
+                  "avatar_url": sender.avatar_url},
+        "message_type": msg.message_type,
+        "preview": notification_message_preview(msg),
+        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        "silent": bool(silent),
+    }
+
+
+def direct_recipient_muted(conv: Conversation, user_id: int) -> bool:
+    side = "a" if conv.user_a_id == user_id else "b"
+    muted_until = getattr(conv, f"muted_until_{side}")
+    return bool(muted_until and muted_until > datetime.utcnow())
+
+
 async def notify_group_message(db: Session, group: ChatGroup, sender: User, msg: Message):
-    from datetime import datetime
     payload = {**serialize_message(msg, 0, db), "group_chat_id": group.id,
                "reaction_counts": {}, "my_reaction": None}
     memberships = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id).all()
@@ -237,14 +277,31 @@ async def notify_group_message(db: Session, group: ChatGroup, sender: User, msg:
         member_id = membership.user_id
         await manager.send_user(member_id, payload)
         muted = membership.muted_until and membership.muted_until > datetime.utcnow()
-        if member_id != sender.id and not muted:
+        if member_id != sender.id:
             member = db.get(User, member_id)
             mentioned = "all" in mention_tokens or bool(member and member.username.lower() in mention_tokens)
-            create_notification(db, user_id=member_id, actor_id=sender.id,
-                                type="group_mention" if mentioned else "new_message",
-                                message=f"{sender.name} mentioned you in {group.name}" if mentioned else f"{sender.name} sent a message in {group.name}",
-                                entity_type="chat_group", entity_id=group.id)
+            if not muted:
+                create_notification(db, user_id=member_id, actor_id=sender.id,
+                                    type="group_mention" if mentioned else "new_message",
+                                    message=f"{sender.name} mentioned you in {group.name}" if mentioned else f"{sender.name} sent a message in {group.name}",
+                                    entity_type="chat_group", entity_id=group.id)
     return payload
+
+
+async def push_group_message_notifications(db: Session, group: ChatGroup, sender: User, msg: Message):
+    memberships = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id).all()
+    for membership in memberships:
+        if membership.user_id == sender.id:
+            continue
+        muted = bool(membership.muted_until and membership.muted_until > datetime.utcnow())
+        try:
+            await notification_ws.send(membership.user_id, message_notification_payload(
+                msg, sender, conversation_id=group.conversation_id, group=group, silent=muted
+            ))
+        except Exception:
+            # The message is committed; a disconnected notification channel
+            # must not turn a successful send into an API error.
+            pass
 
 
 @router.post("/group-conversations")
@@ -272,8 +329,7 @@ async def create_group_conversation(data: ChatGroupCreate, db: Session = Depends
     db.add(msg); db.flush()
     payload = await notify_group_message(db, group, user, msg)
     db.commit(); db.refresh(group); db.refresh(msg)
-    for member_id in member_ids:
-        await notification_ws.send(member_id, {"type": "notification_refresh", "reason": "new_group_message"})
+    await push_group_message_notifications(db, group, user, msg)
     creator_membership = db.query(ChatGroupMember).filter(ChatGroupMember.chat_group_id == group.id, ChatGroupMember.user_id == user.id).first()
     return {"group": {**serialize_chat_group(db, group, creator_membership), "is_group": True}, "message": payload}
 
@@ -307,6 +363,7 @@ async def send_group_message(group_id: int, data: MessageCreate, db: Session = D
     db.add(msg); db.flush()
     payload = await notify_group_message(db, group, user, msg)
     db.commit(); db.refresh(msg)
+    await push_group_message_notifications(db, group, user, msg)
     return payload
 
 
@@ -324,6 +381,8 @@ async def create_group_poll(group_id: int, data: ChatPollCreate, db: Session = D
     db.add(msg); db.flush()
     payload = await notify_group_message(db, group, user, msg)
     db.commit()
+    db.refresh(msg)
+    await push_group_message_notifications(db, group, user, msg)
     return payload
 
 
@@ -498,6 +557,8 @@ def conversations(
             continue
 
         state = conversation_state(conv, user.id)
+        if state["restricted"]:
+            continue
         last_query = (
             db.query(Message)
             .filter(Message.conversation_id == conv.id)
@@ -560,6 +621,8 @@ def unread_message_count(db: Session = Depends(get_db), user: User = Depends(get
     total = 0
     for conv in rows:
         state = conversation_state(conv, user.id)
+        if state["restricted"]:
+            continue
         query = db.query(Message).filter(
             Message.conversation_id == conv.id,
             Message.sender_id != user.id,
@@ -583,12 +646,21 @@ def user_presence(other_user_id: int, db: Session = Depends(get_db), user: User 
     other = db.get(User, other_user_id)
     if not other:
         raise HTTPException(404, "User not found")
-    online = other_user_id == user.id or bool(
+    # If the viewed person restricted the requester, do not reveal their
+    # current or last activity. The restrictor can still see the other side.
+    hidden_by_other = other_user_id != user.id and has_restricted(db, other_user_id, user.id)
+    low, high = sorted((user.id, other_user_id))
+    direct = db.query(Conversation).filter(Conversation.direct_key == f"{low}:{high}").first()
+    previously_messaged = bool(direct and db.query(Message.id).filter(Message.conversation_id == direct.id).first())
+    allowed_audience = other_user_id == user.id or are_friends(db, user.id, other_user_id) or previously_messaged
+    mutually_visible = bool(allowed_audience and user.active_status_enabled and other.active_status_enabled and not hidden_by_other)
+    online = mutually_visible and (other_user_id == user.id or bool(
         notification_ws.active.get(other_user_id) or manager.active.get(other_user_id)
-    )
+    ))
     return {
         "online": online,
-        "last_seen_at": other.last_seen_at,
+        "last_seen_at": other.last_seen_at if mutually_visible else None,
+        "active_status_visible": mutually_visible,
     }
 
 
@@ -611,7 +683,8 @@ async def react_to_message(message_id: int, data: ReactionIn, db: Session = Depe
         db.add(MessageReaction(message_id=message_id, user_id=user.id, reaction=data.reaction)); current = data.reaction
     participant_ids = conversation_participant_ids(db, conv)
     other_id = next((x for x in participant_ids if x != user.id), user.id)
-    if current and msg.sender_id != user.id:
+    recipient_restricted_reactor = msg.sender_id != user.id and has_restricted(db, msg.sender_id, user.id)
+    if current and msg.sender_id != user.id and not recipient_restricted_reactor:
         create_notification(db, user_id=msg.sender_id, actor_id=user.id, type="message_reaction",
                             message=f"{user.name} reacted {REACTIONS[current]} to your message",
                             entity_type="message", entity_id=msg.id)
@@ -621,7 +694,7 @@ async def react_to_message(message_id: int, data: ReactionIn, db: Session = Depe
                "reacting_user_id": user.id, "reaction": current}
     for participant_id in participant_ids:
         await manager.send_user(participant_id, payload)
-    if current and msg.sender_id != user.id:
+    if current and msg.sender_id != user.id and not recipient_restricted_reactor:
         await notification_ws.send(msg.sender_id, {"type": "notification_refresh", "reason": "message_reaction"})
     return {**payload, "my_reaction": mine}
 
@@ -754,7 +827,9 @@ def messages(
 
     changed = False
     for msg in rows:
-        if msg.sender_id == other_user_id and not msg.is_read:
+        # Restricted chats may be read privately without producing Seen or
+        # starting a disappearing-message timer for the sender.
+        if msg.sender_id == other_user_id and not msg.is_read and not state["restricted"]:
             msg.is_read = True
             if conv.disappearing_seconds:
                 msg.expires_at = datetime.utcnow() + timedelta(seconds=conv.disappearing_seconds)
@@ -843,15 +918,18 @@ async def send_message(
     db.add(msg)
     db.flush()
 
-    create_notification(
-        db,
-        user_id=other_user_id,
-        actor_id=user.id,
-        type="new_message",
-        message=f"{user.name} sent you a message",
-        entity_type="conversation",
-        entity_id=conv.id,
-    )
+    recipient_restricted_sender = conversation_state(conv, other_user_id)["restricted"]
+    recipient_muted = direct_recipient_muted(conv, other_user_id)
+    if other_user_id != user.id and not recipient_restricted_sender and not recipient_muted:
+        create_notification(
+            db,
+            user_id=other_user_id,
+            actor_id=user.id,
+            type="new_message",
+            message=f"{user.name} sent you a message",
+            entity_type="conversation",
+            entity_id=conv.id,
+        )
 
     db.commit()
     db.refresh(msg)
@@ -859,13 +937,15 @@ async def send_message(
     payload = {**serialize_message(msg, other_user_id, db), "reaction_counts": {}, "my_reaction": None}
 
     await manager.send_user(user.id, payload)
-    await manager.send_user(other_user_id, payload)
+    if other_user_id != user.id:
+        await manager.send_user(other_user_id, payload)
 
     try:
-        await notification_ws.send(other_user_id, {
-            "type": "notification_refresh",
-            "reason": "new_message",
-        })
+        if other_user_id == user.id or recipient_restricted_sender:
+            return payload
+        await notification_ws.send(other_user_id, message_notification_payload(
+            msg, user, conversation_id=conv.id, silent=recipient_muted
+        ))
     except Exception:
         # Message is already committed; notification push must never make
         # a successful message request fail.
@@ -926,6 +1006,8 @@ async def forward_message(message_id: int, recipient_id: int, db: Session = Depe
     if blocked_between(db, user.id, recipient_id):
         raise HTTPException(403, "You cannot message this user")
     conv = get_or_create_conversation(db, user.id, recipient_id)
+    recipient_restricted_sender = conversation_state(conv, recipient_id)["restricted"]
+    recipient_muted = direct_recipient_muted(conv, recipient_id)
     forwarded = Message(
         conversation_id=conv.id, sender_id=user.id, content=source.content,
         message_type=source.message_type, attachment_url=source.attachment_url,
@@ -933,14 +1015,18 @@ async def forward_message(message_id: int, recipient_id: int, db: Session = Depe
         sticker=source.sticker, forwarded_from_id=source.id, is_read=False,
     )
     db.add(forwarded);db.flush()
-    create_notification(db, user_id=recipient_id, actor_id=user.id, type="new_message",
-                        message=f"{user.name} forwarded you a message", entity_type="conversation", entity_id=conv.id)
+    if recipient_id != user.id and not recipient_restricted_sender and not recipient_muted:
+        create_notification(db, user_id=recipient_id, actor_id=user.id, type="new_message",
+                            message=f"{user.name} forwarded you a message", entity_type="conversation", entity_id=conv.id)
     db.commit();db.refresh(forwarded)
     payload = {**serialize_message(forwarded, recipient_id, db), "reaction_counts": {}, "my_reaction": None}
     await manager.send_user(user.id, payload)
     if recipient_id != user.id:
         await manager.send_user(recipient_id, payload)
-        await notification_ws.send(recipient_id, {"type": "notification_refresh", "reason": "new_message"})
+        if not recipient_restricted_sender:
+            await notification_ws.send(recipient_id, message_notification_payload(
+                forwarded, user, conversation_id=conv.id, silent=recipient_muted
+            ))
     return payload
 
 
@@ -988,6 +1074,10 @@ async def websocket_chat(ws: WebSocket):
                 if other_user_id == user_id or not db.get(User, other_user_id):
                     continue
                 if blocked_between(db, user_id, other_user_id):
+                    continue
+                # Typing indicators from a restricted account are kept inside
+                # the restricted inbox and must not surface as an alert.
+                if has_restricted(db, other_user_id, user_id):
                     continue
                 await manager.send_user(other_user_id, {
                     "type": "typing",

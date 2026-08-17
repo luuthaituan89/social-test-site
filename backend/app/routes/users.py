@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from ..database import get_db
 from ..models import User, Block, Friendship, FriendshipStatus, Post, Privacy, RelationshipRequest, Notification
-from ..schemas import UserPublic, ProfileUpdate, PasswordChange, UsernameChange
+from ..schemas import UserPublic, ProfileUpdate, PasswordChange, UsernameChange, ActiveStatusUpdate
 from ..auth import get_current_user, verify_password, hash_password
 from ..config import settings
 from ..utils import are_friends, is_blocked_either_way, friend_ids
@@ -22,6 +22,18 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 
 @router.get("/me", response_model=UserPublic)
 def me(user: User = Depends(get_current_user)):
+    return user
+
+
+@router.put("/me/active-status", response_model=UserPublic)
+def update_active_status(data: ActiveStatusUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    user.active_status_enabled = data.enabled
+    # Record when visibility was turned off, but never expose this timestamp
+    # while either side has Active Status disabled.
+    if not data.enabled:
+        user.last_seen_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
     return user
 
 

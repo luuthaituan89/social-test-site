@@ -6,7 +6,7 @@ from ..database import get_db
 from ..models import Post, Like, Comment, User, Privacy, Album, AlbumMedia
 from ..schemas import PostCreate, CommentCreate, ReactionIn
 from ..auth import get_current_user
-from ..utils import are_friends, is_blocked_either_way
+from ..utils import are_friends, is_blocked_either_way, has_restricted
 from ..notifications import create_notification
 from .notifications import notification_ws
 from ..activity import log_activity
@@ -26,6 +26,10 @@ def can_view(post: Post, db: Session, viewer: User) -> bool:
         return True
 
     if post.privacy == Privacy.friends:
+        # A restricted account only sees the author's public content, even if
+        # the friendship itself still exists.
+        if has_restricted(db, post.author_id, viewer.id):
+            return False
         return are_friends(db, post.author_id, viewer.id)
 
     return False

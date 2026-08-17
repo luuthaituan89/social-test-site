@@ -17,6 +17,7 @@ class UserPublic(BaseModel):
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
     cover_url: Optional[str] = None
+    active_status_enabled: bool = True
 
 
 class RegisterIn(BaseModel):
@@ -119,6 +120,10 @@ class PasswordChange(BaseModel):
 
 class UsernameChange(BaseModel):
     username: str = Field(min_length=3, max_length=80)
+
+
+class ActiveStatusUpdate(BaseModel):
+    enabled: bool
 
 
 class ReactionIn(BaseModel):

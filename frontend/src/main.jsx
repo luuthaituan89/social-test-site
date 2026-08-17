@@ -15,6 +15,8 @@ const formatDateTime=value=>{const date=instantDate(value);return date&&!Number.
 const formatDate=value=>{const date=instantDate(value);return date&&!Number.isNaN(date.getTime())?new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeZone:selectedTimeZone()}).format(date):""};
 const REACTIONS=[{key:"like",emoji:"👍",label:"Like"},{key:"love",emoji:"❤️",label:"Love"},{key:"haha",emoji:"😂",label:"Haha"},{key:"wow",emoji:"😮",label:"Wow"},{key:"sad",emoji:"😢",label:"Sad"},{key:"angry",emoji:"😡",label:"Angry"}];
 const STICKERS=["😀","😂","🥰","😍","😎","🥳","🤩","🤗","🤔","😴","😭","😡","👍","👏","🙏","💪","❤️","💖","🔥","🎉","✨","🌈","🐶","🐱","🐼","🦊","🐸","🦄","🍕","🍰","☕","⚽","🎮","🚀","🌻","🎁"];
+const MESSAGE_NOTIFICATION_DEFAULTS={enabled:true,desktop:true,sound:true,preview:"full",duration:6000};
+function readMessageNotificationPrefs(){try{return{...MESSAGE_NOTIFICATION_DEFAULTS,...JSON.parse(localStorage.getItem("socialn_message_notifications")||"{}")}}catch{return{...MESSAGE_NOTIFICATION_DEFAULTS}}}
 function messageStickers(value){if(!value)return[];try{const parsed=JSON.parse(value);return Array.isArray(parsed)?parsed.filter(x=>typeof x==="string").slice(0,24):[value]}catch{return[value]}}
 const reactionInfo=key=>REACTIONS.find(x=>x.key===key)||REACTIONS[0];
 function apiError(detail){if(Array.isArray(detail))return detail.map(x=>x?.msg||String(x)).join("; ");if(detail&&typeof detail==="object")return detail.message||JSON.stringify(detail);return detail||"Request failed"}
@@ -51,6 +53,7 @@ function ConfirmHost(){
   </div></div>
 }
 function Avatar({user,size=42,onClick}){return user?.avatar_url?<img className="avatar clickable" style={{width:size,height:size}} src={asset(user.avatar_url)} onClick={onClick}/>:<div className="avatar avatar-fallback clickable" style={{width:size,height:size}} onClick={onClick}>{(user?.name||"?")[0]}</div>}
+function MetroMessageToasts({items,onOpen,onDismiss}){if(!items.length)return null;return <div className="metro-toast-stack" aria-live="polite" aria-label="New messages">{items.map(item=><article className="metro-message-toast" key={item.toastId} style={{"--toast-duration":`${item.duration}ms`}}><button className="metro-toast-main" onClick={()=>onOpen(item)}><Avatar user={{name:item.conversation_name,avatar_url:item.conversation_avatar_url}} size={48}/><span><small>{item.is_group?`${item.actor?.name||"Someone"} · ${item.conversation_name}`:"NEW MESSAGE"}</small><b>{item.is_group?item.conversation_name:item.actor?.name||item.conversation_name}</b><em>{item.displayPreview}</em></span></button><button className="metro-toast-close" aria-label="Dismiss notification" onClick={()=>onDismiss(item.toastId)}><X size={18}/></button><i className="metro-toast-timer"/></article>)}</div>}
 function LanguagePicker({value,onChange,compact=false}){return <div className={`language-picker ${compact?"compact":""}`}><Languages size={18}/><select value={value} onChange={e=>onChange(e.target.value)} aria-label="Language">{LANGUAGES.map(language=><option key={language.code} value={language.code}>{language.label}</option>)}</select></div>}
 function Login({onLogin,language,onLanguageChange}){const[mode,setMode]=useState("login"),[f,setF]=useState({email:"",username:"",name:"",password:""}),[err,setErr]=useState("");async function sub(e){e.preventDefault();try{const d=await api(`/api/auth/${mode}`,{method:"POST",body:JSON.stringify(f)});localStorage.setItem("socialn_token",d.access_token);onLogin(d.user)}catch(e){setErr(e.message)}}return <div className="auth-shell"><div className="auth-stack"><div className="auth-card"><div className="brand big">Social<span>N</span></div><form onSubmit={sub}>{mode==="register"&&<><input placeholder="Full name" onChange={e=>setF({...f,name:e.target.value})}/><input placeholder="Username" onChange={e=>setF({...f,username:e.target.value})}/></>}<input type="email" placeholder="Email" onChange={e=>setF({...f,email:e.target.value})}/><input type="password" placeholder="Password" onChange={e=>setF({...f,password:e.target.value})}/>{err&&<div className="error">{err}</div>}<button className="primary wide">{mode==="login"?"Log in":"Register"}</button></form><button className="link-btn" onClick={()=>setMode(mode==="login"?"register":"login")}>{mode==="login"?"Create account":"Back to login"}</button></div><LanguagePicker compact value={language} onChange={onLanguageChange}/></div></div>}
 
@@ -105,7 +108,7 @@ function PostComposer({onCreated}){
 
   return <form className="card composer" onSubmit={submit}>
     <div className="composer-title">Create post</div>
-    <div className={`composer-row composer-rich-row ${stickers.length?"has-stickers":""}`}><textarea ref={composerInputRef} className={content?"has-text":""} style={content?{width:`${Math.min(54,Math.max(5,content.split("\n").reduce((longest,line)=>Math.max(longest,line.length),0)+2))}ch`}:undefined} value={content} onChange={e=>setContent(e.target.value)} onKeyDown={e=>{if(e.key==="Backspace"&&!content&&stickers.length){e.preventDefault();setStickers(current=>current.slice(0,-1))}}} placeholder={stickers.length?"":"What's on your mind?"}/>{stickers.length>0&&<div className="composer-sticker-previews">{stickers.map((item,index)=><span className="composer-sticker-preview" key={`${item}-${index}`}><i>{item}</i><button type="button" onClick={()=>setStickers(current=>current.filter((_,position)=>position!==index))} aria-label="Remove sticker"><X size={8}/></button></span>)}</div>}<span className="composer-rich-spacer"/></div>
+    <div className={`composer-row composer-rich-row ${stickers.length?"has-stickers":""}`}><textarea ref={composerInputRef} className={content?"has-text":""} value={content} onChange={e=>setContent(e.target.value)} onKeyDown={e=>{if(e.key==="Backspace"&&!content&&stickers.length){e.preventDefault();setStickers(current=>current.slice(0,-1))}}} placeholder={stickers.length?"":"What's on your mind?"}/>{stickers.length>0&&<div className="composer-sticker-previews">{stickers.map((item,index)=><span className="composer-sticker-preview" key={`${item}-${index}`}><i>{item}</i><button type="button" onClick={()=>setStickers(current=>current.filter((_,position)=>position!==index))} aria-label="Remove sticker"><X size={8}/></button></span>)}</div>}<span className="composer-rich-spacer"/></div>
     {file&&<div className="file-chip">{file.name}</div>}
     {selectedGif&&<div className="composer-gif-preview"><img src={selectedGif.preview_url} alt={selectedGif.title||"Selected GIF"}/><button type="button" onClick={()=>setSelectedGif(null)} aria-label="Remove GIF"><X size={17}/></button><span>GIF</span></div>}
     {error&&<div className="error">{error}</div>}
@@ -615,7 +618,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
   const typingStopRef=useRef(null);
   const typingHideRef=useRef(null);
   const[recording,setRecording]=useState(false);
-  const[presence,setPresence]=useState({online:false,last_seen_at:null});
+  const[presence,setPresence]=useState({online:false,last_seen_at:null,active_status_visible:false});
   const[isOtherTyping,setIsOtherTyping]=useState(false);
   const[previewMedia,setPreviewMedia]=useState(null);
   const[selectedStickers,setSelectedStickers]=useState([]),[showStickers,setShowStickers]=useState(false);
@@ -699,7 +702,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
   }
 
   useEffect(()=>{
-    setMessages([]);setSelectedStickers([]);setShowStickers(false);setSelectedGif(null);setShowGifPicker(false);setGifQuery("");setReplyingTo(null);setMessageMenu(null);setForwarding(null);setIsOtherTyping(false);
+    setMessages([]);setSelectedStickers([]);setShowStickers(false);setSelectedGif(null);setShowGifPicker(false);setGifQuery("");setReplyingTo(null);setMessageMenu(null);setForwarding(null);setIsOtherTyping(false);setPresence({online:false,last_seen_at:null,active_status_visible:false});
     if(target?.id&&!target.is_group_draft)loadHistory();
     if(target?.id&&!target.is_group)api(`/api/chat/${target.id}/settings`).then(setDirectSettings).catch(()=>setDirectSettings(null));else setDirectSettings(null);
   },[target?.id,target?.group_chat_id]);
@@ -968,7 +971,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
       <Avatar user={target}/>
       <div>
         <b>{target.is_group?target.name:(directSettings?.other_nickname||target.name)}</b>
-        {target.is_group?<div className="small muted">{(target.members?.length||0)+(target.is_group_draft?1:0)} members{target.is_group_draft?" · Draft":""}</div>:<div className={`presence-line small ${presence.online?"online":"offline"}`}><span className="presence-dot"/>{presence.online?"Online":lastActiveLabel(presence.last_seen_at)}</div>}
+        {target.is_group?<div className="small muted">{(target.members?.length||0)+(target.is_group_draft?1:0)} members{target.is_group_draft?" · Draft":""}</div>:presence.active_status_visible===true&&<div className={`presence-line small ${presence.online?"online":"offline"}`}><span className="presence-dot"/>{presence.online?"Online":lastActiveLabel(presence.last_seen_at)}</div>}
       </div>
       {target.is_group&&!target.is_group_draft&&<button className="group-chat-info-trigger" title="Group information and settings" onClick={e=>{e.stopPropagation();setGroupInfoOpen(true)}}><Info size={21}/></button>}
       {!target.is_group&&<button className="group-chat-info-trigger" title="Conversation information and settings" onClick={e=>{e.stopPropagation();setDirectInfoOpen(true)}}><Info size={21}/></button>}
@@ -1040,7 +1043,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
   </div>
 }
 
-function SettingsPage({user,onUserUpdated,openProfile,theme="dark",onThemeChange,language="en",onLanguageChange,timezone="auto",onTimezoneChange}){
+function SettingsPage({user,onUserUpdated,openProfile,openMessage,theme="dark",onThemeChange,language="en",onLanguageChange,timezone="auto",onTimezoneChange,notificationPrefs=MESSAGE_NOTIFICATION_DEFAULTS,onNotificationPrefsChange}){
   const[f,setF]=useState({current_password:"",new_password:"",confirm_password:""}),[msg,setMsg]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
   const[username,setUsername]=useState(user.username||"");
   const[usernameStatus,setUsernameStatus]=useState(null);
@@ -1048,6 +1051,7 @@ function SettingsPage({user,onUserUpdated,openProfile,theme="dark",onThemeChange
   const[usernameErr,setUsernameErr]=useState("");
   const[usernameBusy,setUsernameBusy]=useState(false);
   const[blockedUsers,setBlockedUsers]=useState([]),[restrictedUsers,setRestrictedUsers]=useState([]),[privacyBusy,setPrivacyBusy]=useState(null),[privacyError,setPrivacyError]=useState("");
+  const[activeStatus,setActiveStatus]=useState(user.active_status_enabled!==false),[activeStatusBusy,setActiveStatusBusy]=useState(false),[activeStatusMessage,setActiveStatusMessage]=useState("");
 
   useEffect(()=>{api("/api/users/me/username-status").then(setUsernameStatus).catch(e=>setUsernameErr(e.message))},[user.id]);
   async function loadPrivacyLists(){
@@ -1055,6 +1059,7 @@ function SettingsPage({user,onUserUpdated,openProfile,theme="dark",onThemeChange
     catch(e){setPrivacyError(e.message)}
   }
   useEffect(()=>{loadPrivacyLists()},[user.id]);
+  useEffect(()=>{setActiveStatus(user.active_status_enabled!==false)},[user.active_status_enabled]);
 
   async function unblock(item){
     if(!await confirmDialog({title:"Unblock this person?",message:`${item.name} will be able to find your profile and contact you again.`,confirmLabel:"Unblock",cancelLabel:"Keep blocked"}))return;
@@ -1063,6 +1068,23 @@ function SettingsPage({user,onUserUpdated,openProfile,theme="dark",onThemeChange
   async function unrestrict(item){
     if(!await confirmDialog({title:"Remove restriction?",message:`Move ${item.name}'s conversation back to your regular messages?`,confirmLabel:"Unrestrict",cancelLabel:"Keep restricted"}))return;
     setPrivacyBusy(`restrict-${item.id}`);try{await api(`/api/chat/restricted/${item.id}`,{method:"DELETE"});setRestrictedUsers(rows=>rows.filter(row=>row.id!==item.id))}catch(e){setPrivacyError(e.message)}finally{setPrivacyBusy(null)}
+  }
+  async function changeActiveStatus(){
+    const enabled=!activeStatus;
+    const accepted=await confirmDialog({title:enabled?"Turn on Active Status?":"Turn off Active Status?",message:enabled?"You and other people with Active Status turned on will be able to see when each other are online or were recently active.":"Other people will not see when you are online or were recently active. You also will not be able to see their activity status.",detail:"This setting follows mutual visibility: both people must have Active Status turned on.",confirmLabel:enabled?"Turn on":"Turn off",cancelLabel:"Cancel"});
+    if(!accepted)return;
+    setActiveStatusBusy(true);setActiveStatusMessage("");
+    try{const updated=await api("/api/users/me/active-status",{method:"PUT",body:JSON.stringify({enabled})});setActiveStatus(updated.active_status_enabled!==false);onUserUpdated?.(updated);setActiveStatusMessage(enabled?"Active Status is on.":"Active Status is off.")}
+    catch(e){setPrivacyError(e.message)}finally{setActiveStatusBusy(false)}
+  }
+
+  async function changeNotificationPref(key,value){
+    if(key==="desktop"&&value){
+      if(!("Notification" in window)){setPrivacyError("Desktop notifications are not supported by this browser.");return}
+      const permission=Notification.permission==="granted"?"granted":await Notification.requestPermission();
+      if(permission!=="granted"){setPrivacyError("Desktop notification permission was not granted.");return}
+    }
+    onNotificationPrefsChange?.({...notificationPrefs,[key]:value});
   }
 
   async function confirmChange(title,message,detail){return confirmDialog({variant:"confirm",title,message,detail,confirmLabel:"Apply changes",cancelLabel:"Cancel"})}
@@ -1124,6 +1146,20 @@ function SettingsPage({user,onUserUpdated,openProfile,theme="dark",onThemeChange
       <label>Time zone<select value={timezone} onChange={e=>changeTimezone(e.target.value)}>{TIMEZONES.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <div className="timezone-preview"><span>Current time</span><b>{formatDateTime(new Date().toISOString())}</b></div>
     </div>
+    <div className="settings-section active-status-settings">
+      <div className="active-status-copy"><div><h3>Active Status</h3><p className="muted small">Show when you're active or recently active. If this is off, you won't see other people's activity status either.</p></div><span className={`active-status-preview ${activeStatus?"on":"off"}`}><i/>{activeStatus?"On":"Off"}</span></div>
+      <label className="active-status-toggle"><span><b>Show when you're active</b><small>Mutual visibility applies to online and last active information.</small></span><input type="checkbox" role="switch" checked={activeStatus} disabled={activeStatusBusy} onChange={changeActiveStatus}/></label>
+      {activeStatusMessage&&<div className="success-notice">{activeStatusMessage}</div>}
+    </div>
+    <div className="settings-section message-notification-settings">
+      <h3>Message notifications</h3>
+      <p className="muted small">Control Metro-style alerts for new direct and group messages on this browser.</p>
+      <label className="settings-switch-row"><span><b>In-app notifications</b><small>Show a Metro notification tile while SocialN is open.</small></span><input type="checkbox" role="switch" checked={notificationPrefs.enabled} onChange={e=>changeNotificationPref("enabled",e.target.checked)}/></label>
+      <label className="settings-switch-row"><span><b>Desktop notifications</b><small>Show an operating-system notification when this tab is in the background.</small></span><input type="checkbox" role="switch" checked={notificationPrefs.desktop} disabled={!notificationPrefs.enabled} onChange={e=>changeNotificationPref("desktop",e.target.checked)}/></label>
+      <label className="settings-switch-row"><span><b>Notification sound</b><small>Play a short sound for messages that are not muted.</small></span><input type="checkbox" role="switch" checked={notificationPrefs.sound} disabled={!notificationPrefs.enabled} onChange={e=>changeNotificationPref("sound",e.target.checked)}/></label>
+      <div className="message-notification-grid"><label>Message preview<select value={notificationPrefs.preview} onChange={e=>changeNotificationPref("preview",e.target.value)}><option value="full">Sender and message</option><option value="sender">Sender only</option><option value="hidden">Hide all details</option></select></label><label>Display duration<select value={notificationPrefs.duration} onChange={e=>changeNotificationPref("duration",Number(e.target.value))}><option value={4000}>4 seconds</option><option value={6000}>6 seconds</option><option value={8000}>8 seconds</option></select></label></div>
+      {"Notification" in window&&<div className="notification-permission">Browser permission: <b>{Notification.permission}</b></div>}
+    </div>
     <div className="settings-section privacy-management">
       <h3>Blocking &amp; restrictions</h3>
       <p className="muted small">Review people you have blocked and conversations you have restricted.</p>
@@ -1132,7 +1168,7 @@ function SettingsPage({user,onUserUpdated,openProfile,theme="dark",onThemeChange
         {blockedUsers.length===0?<div className="muted privacy-empty">You haven't blocked anyone.</div>:blockedUsers.map(item=><div className="privacy-user-row" key={item.id}><button className="privacy-user-main" onClick={()=>openProfile?.(item.id)}><Avatar user={item} size={44}/><span><b>{item.name}</b><small>@{item.username}</small></span></button><button className="secondary" disabled={privacyBusy===`block-${item.id}`} onClick={()=>unblock(item)}>{privacyBusy===`block-${item.id}`?"Updating...":"Unblock"}</button></div>)}
       </div>
       <div className="privacy-list-group"><div className="privacy-list-title"><span><MessageCircle size={19}/> Restricted conversations</span><b>{restrictedUsers.length}</b></div>
-        {restrictedUsers.length===0?<div className="muted privacy-empty">You haven't restricted any conversations.</div>:restrictedUsers.map(item=><div className="privacy-user-row" key={item.id}><button className="privacy-user-main" onClick={()=>openProfile?.(item.id)}><Avatar user={item} size={44}/><span><b>{item.name}</b><small>@{item.username}</small></span></button><button className="secondary" disabled={privacyBusy===`restrict-${item.id}`} onClick={()=>unrestrict(item)}>{privacyBusy===`restrict-${item.id}`?"Updating...":"Unrestrict"}</button></div>)}
+        {restrictedUsers.length===0?<div className="muted privacy-empty">You haven't restricted any conversations.</div>:restrictedUsers.map(item=><div className="privacy-user-row" key={item.id}><button className="privacy-user-main" onClick={()=>openProfile?.(item.id)}><Avatar user={item} size={44}/><span><b>{item.name}</b><small>@{item.username}</small></span></button><div className="privacy-user-actions"><button className="secondary" onClick={()=>openMessage?.(item)}>View messages</button><button className="secondary" disabled={privacyBusy===`restrict-${item.id}`} onClick={()=>unrestrict(item)}>{privacyBusy===`restrict-${item.id}`?"Updating...":"Unrestrict"}</button></div></div>)}
       </div>
     </div>
     <div className="settings-section">
@@ -1228,12 +1264,17 @@ function RoutedApp(){
   const[language,setLanguage]=useState(()=>localStorage.getItem("socialn_language")||"vi");
   const[timezone,setTimezone]=useState(()=>localStorage.getItem("socialn_timezone")||"auto");
   const[sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem("socialn_sidebar_collapsed")==="true"),[mobileSidebarOpen,setMobileSidebarOpen]=useState(false);
+  const[notificationPrefs,setNotificationPrefs]=useState(readMessageNotificationPrefs),[messageToasts,setMessageToasts]=useState([]);
   const searchTimerRef=useRef(null);
+  const notificationPrefsRef=useRef(notificationPrefs),viewRef=useRef(view),targetRef=useRef(target),seenMessageNotificationsRef=useRef(new Set());
 
   useEffect(()=>{document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme;localStorage.setItem("socialn_theme",theme)},[theme]);
   useEffect(()=>{setSiteLanguage(language)},[language]);
   useEffect(()=>{localStorage.setItem("socialn_timezone",timezone)},[timezone]);
   useEffect(()=>{localStorage.setItem("socialn_sidebar_collapsed",String(sidebarCollapsed))},[sidebarCollapsed]);
+  useEffect(()=>{notificationPrefsRef.current=notificationPrefs;localStorage.setItem("socialn_message_notifications",JSON.stringify(notificationPrefs))},[notificationPrefs]);
+  useEffect(()=>{viewRef.current=view},[view]);
+  useEffect(()=>{targetRef.current=target},[target]);
   function changeTimezone(value){localStorage.setItem("socialn_timezone",value);setTimezone(value)}
 
   function setRoute(path,nextView,{replace=false}={}){
@@ -1260,6 +1301,38 @@ function RoutedApp(){
   function message(u){setTarget(u);setRoute(`/messages/${encodeURIComponent(u.username)}`,"chat");loadC()}
   function openGroupChat(c){setTarget({...c,id:c.group_chat_id,is_group:true});setRoute(`/messages/group/${c.group_chat_id}`,"chat");loadC()}
 
+  async function openMessageNotification(item){
+    setMessageToasts(rows=>rows.filter(row=>row.toastId!==item.toastId));
+    if(item.is_group){try{const d=await api(`/api/chat/group-conversations/${item.group_chat_id}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true});setRoute(`/messages/group/${item.group_chat_id}`,"chat")}catch(e){setRouteError(e.message)}}
+    else if(item.actor)message(item.actor);
+  }
+  function playMessageNotificationSound(){
+    try{const AudioContext=window.AudioContext||window.webkitAudioContext;if(!AudioContext)return;const context=new AudioContext(),oscillator=context.createOscillator(),gain=context.createGain();oscillator.type="sine";oscillator.frequency.setValueAtTime(740,context.currentTime);oscillator.frequency.exponentialRampToValueAtTime(980,context.currentTime+.12);gain.gain.setValueAtTime(.0001,context.currentTime);gain.gain.exponentialRampToValueAtTime(.11,context.currentTime+.015);gain.gain.exponentialRampToValueAtTime(.0001,context.currentTime+.22);oscillator.connect(gain);gain.connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+.23);oscillator.onended=()=>context.close()}catch{}
+  }
+  function handleMessageNotification(payload){
+    if(payload?.type!=="message_notification"||payload.silent)return;
+    const prefs=notificationPrefsRef.current;
+    if(!prefs.enabled)return;
+    const id=String(payload.message_id||`${payload.conversation_id}-${payload.created_at}`);
+    if(seenMessageNotificationsRef.current.has(id))return;
+    seenMessageNotificationsRef.current.add(id);
+    if(seenMessageNotificationsRef.current.size>300)seenMessageNotificationsRef.current=new Set([id]);
+    const current=targetRef.current;
+    const alreadyOpen=viewRef.current==="chat"&&(payload.is_group?current?.is_group&&Number(current.group_chat_id)===Number(payload.group_chat_id):!current?.is_group&&Number(current?.id)===Number(payload.actor?.id));
+    if(alreadyOpen&&document.visibilityState==="visible")return;
+    const displayPreview=prefs.preview==="hidden"?"You have a new message":prefs.preview==="sender"?"New message":payload.preview||"New message";
+    const item={...payload,displayPreview,duration:Number(prefs.duration)||6000,toastId:`message-${id}`};
+    if(prefs.sound)playMessageNotificationSound();
+    if(document.visibilityState==="visible"){
+      setMessageToasts(rows=>[item,...rows.filter(row=>row.toastId!==item.toastId)].slice(0,4));
+      window.setTimeout(()=>setMessageToasts(rows=>rows.filter(row=>row.toastId!==item.toastId)),item.duration);
+    }else if(prefs.desktop&&"Notification" in window&&Notification.permission==="granted"){
+      const title=prefs.preview==="hidden"?"SocialN":payload.is_group?payload.conversation_name:payload.actor?.name||"SocialN";
+      const nativeNotification=new Notification(title,{body:displayPreview,icon:asset(payload.conversation_avatar_url)||undefined,tag:`socialn-${payload.is_group?"group":"direct"}-${payload.group_chat_id||payload.actor?.id}`,silent:true});
+      nativeNotification.onclick=()=>{window.focus();nativeNotification.close();openMessageNotification(item)};
+    }
+  }
+
   async function resolvePath(replace=false){
     const path=currentPath();
     if(!path){setRoute("/","home",{replace});return}
@@ -1280,7 +1353,7 @@ function RoutedApp(){
   }
 
   useEffect(()=>{if(tok())api("/api/users/me").then(setUser).catch(()=>{localStorage.removeItem("socialn_token");window.history.replaceState({},"","/")})},[]);
-  useEffect(()=>{if(!user)return;refresh();resolvePath(true);const onPop=()=>resolvePath(true);window.addEventListener("popstate",onPop);const w=new WebSocket(`${WS}/api/notifications/ws?token=${encodeURIComponent(tok())}`);w.onopen=()=>w.send("ready");w.onmessage=async event=>{loadN();loadMessageUnread();loadC();try{const payload=JSON.parse(event.data);if(["relationship_accepted","relationship_declined","relationship_unlinked"].includes(payload?.reason)){const updated=await api(`/api/users/${user.id}/profile`);setProfile(current=>Number(current?.user?.id)===Number(user.id)?updated:current);setUser(await api("/api/users/me"))}}catch{}};return()=>{window.removeEventListener("popstate",onPop);w.close()}},[user?.id]);
+  useEffect(()=>{if(!user)return;refresh();resolvePath(true);const onPop=()=>resolvePath(true);window.addEventListener("popstate",onPop);const w=new WebSocket(`${WS}/api/notifications/ws?token=${encodeURIComponent(tok())}`);w.onopen=()=>w.send("ready");w.onmessage=async event=>{loadN();loadMessageUnread();loadC();try{const payload=JSON.parse(event.data);handleMessageNotification(payload);if(["relationship_accepted","relationship_declined","relationship_unlinked"].includes(payload?.reason)){const updated=await api(`/api/users/${user.id}/profile`);setProfile(current=>Number(current?.user?.id)===Number(user.id)?updated:current);setUser(await api("/api/users/me"))}}catch{}};return()=>{window.removeEventListener("popstate",onPop);w.close()}},[user?.id]);
 
   function query(v){setSearch(v);clearTimeout(searchTimerRef.current);if(!v.trim()){setResults([]);return}searchTimerRef.current=setTimeout(async()=>{try{setResults(await api(`/api/users/search?q=${encodeURIComponent(v.trim())}`))}catch{setResults([])}},450)}
   async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.entity_type==="group"&&n.entity_id){setGroupId(n.entity_id);go(`/groups/${n.entity_id}`,"groups")}else if(n.entity_type==="chat_group"&&n.entity_id){try{const d=await api(`/api/chat/group-conversations/${n.entity_id}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true});go(`/messages/group/${n.entity_id}`,"chat")}catch(e){setRouteError(e.message)}}else if(n.type==="new_message"&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
@@ -1289,7 +1362,7 @@ function RoutedApp(){
   function toggleSidebar(){if(window.matchMedia("(max-width: 900px)").matches)setMobileSidebarOpen(value=>!value);else setSidebarCollapsed(value=>!value)}
 
   if(!user)return <Login language={language} onLanguageChange={setLanguage} onLogin={u=>{setUser(u);window.history.replaceState({},"","/")}}/>;
-  return <div><ConfirmHost/>
+  return <div><ConfirmHost/><MetroMessageToasts items={messageToasts} onOpen={openMessageNotification} onDismiss={id=>setMessageToasts(rows=>rows.filter(row=>row.toastId!==id))}/>
     <header className="topbar"><button className="sidebar-toggle" onClick={toggleSidebar} aria-label={mobileSidebarOpen||!sidebarCollapsed?"Close navigation menu":"Open navigation menu"} aria-expanded={mobileSidebarOpen||!sidebarCollapsed}><Menu size={23}/></button><div className="brand" onClick={()=>go("/","home")}>Social<span>N</span></div><div className="search"><Search/><input value={search} onChange={e=>query(e.target.value)} placeholder="Search SocialN..."/>{results.length>0&&<div className="search-results">{results.map(u=><button key={u.id} onClick={()=>{openProfile(u.id);setResults([]);setSearch("")}}><Avatar user={u}/><span>{u.name}<small>@{u.username}</small></span></button>)}</div>}</div>
       <div className="top-actions">
         <button className="message-icon-btn top-messages" title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/>{messageUnread>0&&<span className="badge">{messageUnread>99?"99+":messageUnread}</span>}</button>
@@ -1297,7 +1370,7 @@ function RoutedApp(){
         <div className="account-wrap"><button className="account-trigger" title="Account" aria-expanded={accountDrop} onClick={()=>{setAccountDrop(value=>!value);setDrop(false)}}><Avatar user={user} size={40}/><span className="account-caret">⌄</span></button>{accountDrop&&<div className="account-dropdown"><button className="account-profile" onClick={()=>openProfile(user.id)}><Avatar user={user} size={46}/><span><b>{user.name}</b><small>View your profile</small></span></button><div className="account-divider"/><button onClick={()=>go("/settings","settings")}><Settings size={20}/><span>Settings</span></button><button onClick={logout}><LogOut size={20}/><span>Log out</span></button></div>}</div>
       </div>
     </header>
-    <div className={`layout ${sidebarCollapsed?"sidebar-collapsed":""}`}>{mobileSidebarOpen&&<button className="sidebar-backdrop" aria-label="Close navigation menu" onClick={()=>setMobileSidebarOpen(false)}/>}<aside className={`sidebar ${mobileSidebarOpen?"open":""}`}><button className="side-user" title={user.name} onClick={()=>openProfile(user.id)}><Avatar user={user}/><b className="sidebar-label">{user.name}</b></button><button title="Home" onClick={()=>go("/","home")}><Home/><span className="sidebar-label">Home</span></button><button title="Friends" onClick={()=>go("/friends","friends")}><UserCheck/><span className="sidebar-label">Friends</span>{requests.length>0&&<span className="side-badge">{requests.length}</span>}</button><button title="Groups" onClick={()=>{setGroupId(null);go("/groups","groups")}}><UsersRound/><span className="sidebar-label">Groups</span></button><button title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/><span className="sidebar-label">Messages</span></button><button title="Activity log" onClick={()=>go("/activity-log","activity")}><History/><span className="sidebar-label">Activity log</span></button><button title="Settings" onClick={()=>go("/settings","settings")}><Settings/><span className="sidebar-label">Settings</span></button></aside>
+    <div className={`layout ${sidebarCollapsed?"sidebar-collapsed":""}`}>{mobileSidebarOpen&&<button className="sidebar-backdrop" aria-label="Close navigation menu" onClick={()=>setMobileSidebarOpen(false)}/>}<aside className={`sidebar ${mobileSidebarOpen?"open":""}`}><button className="side-user" title={user.name} onClick={()=>openProfile(user.id)}><Avatar user={user}/><b className="sidebar-label">{user.name}</b></button><button className={view==="home"?"selected":""} title="Home" onClick={()=>go("/","home")}><Home/><span className="sidebar-label">Home</span></button><button className={view==="friends"?"selected":""} title="Friends" onClick={()=>go("/friends","friends")}><UserCheck/><span className="sidebar-label">Friends</span>{requests.length>0&&<span className="side-badge">{requests.length}</span>}</button><button className={view==="groups"?"selected":""} title="Groups" onClick={()=>{setGroupId(null);go("/groups","groups")}}><UsersRound/><span className="sidebar-label">Groups</span></button><button className={view==="chat"?"selected":""} title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/><span className="sidebar-label">Messages</span></button><button className={view==="activity"?"selected":""} title="Activity log" onClick={()=>go("/activity-log","activity")}><History/><span className="sidebar-label">Activity log</span></button><button className={view==="settings"?"selected":""} title="Settings" onClick={()=>go("/settings","settings")}><Settings/><span className="sidebar-label">Settings</span></button></aside>
       <main className={`main ${view==="chat"?"chat-main":view==="profile"?"profile-main":["home","friends","settings","activity","notifications","groups"].includes(view)?"adaptive-main":""}`}>
         {routeError&&<div className="error">{routeError}</div>}
         {view==="home"&&<><PostComposer onCreated={p=>setFeed(v=>[p,...v])}/>{feed.length===0?<div className="card empty">No posts yet. Create the first post.</div>:feed.map(p=><PostCard key={p.id} post={p} me={user} onOpenProfile={openProfile} onUpdated={updated=>setFeed(v=>v.map(x=>x.id===updated.id?updated:x))} onDeleted={id=>setFeed(v=>v.filter(x=>x.id!==id))}/>)}</>}
@@ -1314,7 +1387,7 @@ function RoutedApp(){
         {view==="notifications"&&<div className="card notifications-page">{notifs.map(n=><button className="notification-row" key={n.id} onClick={()=>read(n)}>{n.message}</button>)}</div>}
         {view==="activity"&&<ActivityLogPage openProfile={openProfile}/>} 
         {view==="groups"&&<GroupsPage groupId={groupId} onOpen={id=>{setGroupId(id);go(`/groups/${id}`,"groups")}}/>}
-        {view==="settings"&&<SettingsPage user={user} onUserUpdated={setUser} openProfile={openProfile} theme={theme} onThemeChange={setTheme} language={language} onLanguageChange={setLanguage} timezone={timezone} onTimezoneChange={changeTimezone}/>}
+        {view==="settings"&&<SettingsPage user={user} onUserUpdated={setUser} openProfile={openProfile} openMessage={message} theme={theme} onThemeChange={setTheme} language={language} onLanguageChange={setLanguage} timezone={timezone} onTimezoneChange={changeTimezone} notificationPrefs={notificationPrefs} onNotificationPrefsChange={setNotificationPrefs}/>}
         {view==="not_found"&&<div className="card empty"><h2>Page not found</h2><button className="primary" onClick={()=>go("/","home")}>Go home</button></div>}
       </main>
     </div>
