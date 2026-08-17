@@ -18,6 +18,7 @@ const STICKERS=["😀","😂","🥰","😍","😎","🥳","🤩","🤗","🤔","
 const MESSAGE_NOTIFICATION_DEFAULTS={enabled:true,desktop:true,sound:true,preview:"full",duration:6000};
 function readMessageNotificationPrefs(){try{return{...MESSAGE_NOTIFICATION_DEFAULTS,...JSON.parse(localStorage.getItem("socialn_message_notifications")||"{}")}}catch{return{...MESSAGE_NOTIFICATION_DEFAULTS}}}
 function messageStickers(value){if(!value)return[];try{const parsed=JSON.parse(value);return Array.isArray(parsed)?parsed.filter(x=>typeof x==="string").slice(0,24):[value]}catch{return[value]}}
+function isEmojiOnlyMessage(value){return Boolean(value?.trim())&&/^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Emoji_Modifier}|\uFE0F|\u200D)+$/u.test(value.trim())}
 const reactionInfo=key=>REACTIONS.find(x=>x.key===key)||REACTIONS[0];
 function apiError(detail){if(Array.isArray(detail))return detail.map(x=>x?.msg||String(x)).join("; ");if(detail&&typeof detail==="object")return detail.message||JSON.stringify(detail);return detail||"Request failed"}
 async function api(p,o={}){const h=new Headers(o.headers||{});if(tok())h.set("Authorization",`Bearer ${tok()}`);if(!(o.body instanceof FormData)&&o.body!==undefined)h.set("Content-Type","application/json");const r=await fetch(`${API}${p}`,{...o,headers:h}),d=await r.json().catch(()=>({}));if(!r.ok)throw Error(apiError(d.detail));return d}
@@ -182,8 +183,11 @@ function PostCard({post,me,onOpenProfile,onUpdated,onDeleted}){
   const[menu,setMenu]=useState(false);
   const[draft,setDraft]=useState({content:post.content||"",privacy:post.privacy||"public",image_url:post.image_url||null,media_type:post.media_type||"image",sticker:post.sticker||null});
   const[busy,setBusy]=useState(false);
+  const[reactionDialog,setReactionDialog]=useState(null);
+  const[reactionFilter,setReactionFilter]=useState("all");
 
   async function react(type){try{const d=await api(`/api/posts/${post.id}/like`,{method:"POST",body:JSON.stringify({reaction:type})});onUpdated?.({...post,...d})}catch(e){alert(e.message)}}
+  async function openReactions(){if(!(post.likes_count>0))return;setReactionFilter("all");setReactionDialog({loading:true,items:[]});try{const data=await api(`/api/posts/${post.id}/reactions`);setReactionDialog({loading:false,items:Array.isArray(data.items)?data.items:[]})}catch(e){setReactionDialog(null);alert(e.message)}}
   async function addComment(e){e.preventDefault();if(!comment.trim())return;try{const row=await api(`/api/posts/${post.id}/comments`,{method:"POST",body:JSON.stringify({content:comment})});setComment("");onUpdated?.({...post,comments:[...(post.comments||[]),row]})}catch(e){alert(e.message)}}
   async function saveEdit(){setBusy(true);try{const row=await api(`/api/posts/${post.id}`,{method:"PUT",body:JSON.stringify(draft)});setEditing(false);setMenu(false);onUpdated?.(row)}catch(e){alert(e.message)}finally{setBusy(false)}}
   async function remove(){if(!await confirmDialog({title:"Delete post?",message:"This post and its activity will be permanently removed.",detail:"This action cannot be undone.",confirmLabel:"Delete post"}))return;try{await api(`/api/posts/${post.id}`,{method:"DELETE"});onDeleted?.(post.id)}catch(e){alert(e.message)}}
@@ -197,10 +201,21 @@ function PostCard({post,me,onOpenProfile,onUpdated,onDeleted}){
     </div>
     {editing?<div className="post-edit"><textarea value={draft.content} onChange={e=>setDraft({...draft,content:e.target.value})}/><select value={draft.privacy} onChange={e=>setDraft({...draft,privacy:e.target.value})}><option value="public">Public</option><option value="friends">Friends</option><option value="only_me">Only me</option></select><div className="edit-actions"><button className="secondary" onClick={()=>setEditing(false)}>Cancel</button><button className="primary" disabled={busy} onClick={saveEdit}>Save</button></div></div>:<><div className={`post-rich-content ${post.content?"mixed":"sticker-only"}`}>{post.content&&<div className="post-content">{post.content}</div>}{post.sticker&&<div className="post-stickers" role="img" aria-label="Stickers">{messageStickers(post.sticker).map((item,index)=><span className="post-sticker" key={`${item}-${index}`}>{item}</span>)}</div>}</div>{post.album&&<button className="post-album-link" onClick={openPostAlbum}><ImageIcon size={15}/> {post.album.name}</button>}{post.image_url&&(post.media_type==="video"?<video className="post-image post-video" src={asset(post.image_url)} controls preload="metadata" playsInline/>:<img className={`post-image ${post.media_type==="gif"?"post-gif":""}`} src={asset(post.image_url)} alt={post.media_type==="gif"?"GIF":"Post"}/>)}</>}
     {post.shared_post&&<div className="shared-card"><div className="shared-author"><Avatar user={post.shared_post.author} size={34}/><b>{post.shared_post.author.name}</b></div><div className={`post-rich-content ${post.shared_post.content?"mixed":"sticker-only"}`}>{post.shared_post.content&&<div className="shared-content">{post.shared_post.content}</div>}{post.shared_post.sticker&&<div className="post-stickers shared-stickers" role="img" aria-label="Stickers">{messageStickers(post.shared_post.sticker).map((item,index)=><span className="post-sticker" key={`${item}-${index}`}>{item}</span>)}</div>}</div>{post.shared_post.image_url&&(post.shared_post.media_type==="video"?<video className="shared-image" src={asset(post.shared_post.image_url)} controls preload="metadata"/>:<img className="shared-image" src={asset(post.shared_post.image_url)} alt="Shared post"/>)}</div>}
-    <div className="post-stats"><span className="reaction-summary">{Object.entries(post.reaction_counts||{}).filter(([,n])=>n>0).map(([key])=><span key={key}>{reactionInfo(key).emoji}</span>)} {post.likes_count||0} reactions</span><span>{post.comments?.length||0} comments</span></div>
+    <div className="post-stats"><button type="button" className="reaction-summary post-reaction-total" disabled={!post.likes_count} onClick={openReactions}>{Object.entries(post.reaction_counts||{}).filter(([,n])=>n>0).map(([key])=><span key={key}>{reactionInfo(key).emoji}</span>)} {post.likes_count||0} reactions</button><span>{post.comments?.length||0} comments</span></div>
     <div className="post-buttons"><div className="reaction-wrap"><button className={post.my_reaction?"active":""} onClick={()=>react(post.my_reaction||"like")}><span>{post.my_reaction?reactionInfo(post.my_reaction).emoji:<ThumbsUp size={18}/>}</span> {post.my_reaction?reactionInfo(post.my_reaction).label:"Like"}</button><div className="reaction-picker">{REACTIONS.map(r=><button key={r.key} title={r.label} onClick={()=>react(r.key)}>{r.emoji}</button>)}</div></div><button onClick={()=>document.getElementById(`comment-${post.id}`)?.focus()}><MessageSquare size={18}/> Comment</button><button onClick={share}><Share2 size={18}/> Share</button></div>
     <div>{(post.comments||[]).map(c=><div className="comment" key={c.id}><Avatar user={c.author} size={32}/><div className="comment-body"><b>{c.author.name}</b><div>{c.content}</div></div></div>)}</div>
     <form className="comment-box" onSubmit={addComment}><input id={`comment-${post.id}`} value={comment} onChange={e=>setComment(e.target.value)} placeholder="Write a comment..."/><button><Send size={16}/></button></form>
+    {reactionDialog&&<div className="modal-backdrop reaction-list-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setReactionDialog(null)}}><section className="reaction-list-dialog" role="dialog" aria-modal="true" aria-label="People who reacted">
+      <header><h3>Reactions</h3><button type="button" aria-label="Close" onClick={()=>setReactionDialog(null)}><X size={21}/></button></header>
+      <nav className="reaction-list-tabs">
+        <button type="button" className={reactionFilter==="all"?"active":""} onClick={()=>setReactionFilter("all")}>All <b>{reactionDialog.items.length}</b></button>
+        {REACTIONS.filter(item=>(post.reaction_counts?.[item.key]||0)>0).map(item=><button type="button" className={reactionFilter===item.key?"active":""} key={item.key} title={item.label} onClick={()=>setReactionFilter(item.key)}><span>{item.emoji}</span><b>{post.reaction_counts[item.key]}</b></button>)}
+      </nav>
+      <div className="reaction-list-scroll">
+        {reactionDialog.loading?<div className="reaction-list-status">Loading reactions…</div>:reactionDialog.items.filter(item=>reactionFilter==="all"||item.reaction===reactionFilter).map(item=><button type="button" className="reaction-person" key={item.user.id} onClick={()=>{setReactionDialog(null);onOpenProfile?.(item.user.id)}}><span className="reaction-person-avatar"><Avatar user={item.user} size={44}/><i>{reactionInfo(item.reaction).emoji}</i></span><span><b>{item.user.name}</b><small>@{item.user.username}</small></span><em>{reactionInfo(item.reaction).label}</em></button>)}
+        {!reactionDialog.loading&&!reactionDialog.items.some(item=>reactionFilter==="all"||item.reaction===reactionFilter)&&<div className="reaction-list-status">No reactions yet.</div>}
+      </div>
+    </section></div>}
   </article>
 }
 
@@ -1005,7 +1020,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
     try{const result=await api(`/api/chat/group-conversations/${target.group_chat_id}/polls`,{method:"POST",body:JSON.stringify({question:pollQuestion,options:pollOptions})});mergeMessages(result);setPollOpen(false);setPollQuestion("");setPollOptions(["",""])}catch(e){alert(e.message)}
   }
   async function votePoll(pollId,optionId){try{const result=await api(`/api/chat/polls/${pollId}/vote/${optionId}`,{method:"POST"});mergeMessages(result)}catch(e){alert(e.message)}}
-  async function sendQuickReaction(){try{const endpoint=target.is_group?`/api/chat/group-conversations/${target.group_chat_id}/messages`:`/api/chat/${target.id}/messages`;const result=await api(endpoint,{method:"POST",body:JSON.stringify({content:(target.is_group?target.quick_reaction:directSettings?.quick_reaction)||"👍",message_type:"text"})});mergeMessages(result);onChanged?.()}catch(e){alert(e.message)}}
+  async function sendQuickReaction(){try{const endpoint=target.is_group?`/api/chat/group-conversations/${target.group_chat_id}/messages`:`/api/chat/${target.id}/messages`,reaction=(target.is_group?target.quick_reaction:directSettings?.quick_reaction)||"👍";const result=await api(endpoint,{method:"POST",body:JSON.stringify({content:"",message_type:"sticker",sticker:JSON.stringify([reaction])})});mergeMessages(result);onChanged?.()}catch(e){alert(e.message)}}
 
   const mentionMatch=target?.is_group?text.match(/(^|\s)@([^\s@]*)$/):null;
   const mentionQuery=(mentionMatch?.[2]||"").toLowerCase();
@@ -1032,7 +1047,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
     </div>
 
     <div className="messages">
-      {messages.map(x=><div key={x.id} className={`bubble ${x.sender_id===Number(me.id)?"mine":""} attachment-bubble`}>
+      {messages.map(x=><div key={x.id} className={`bubble ${x.sender_id===Number(me.id)?"mine":""} attachment-bubble ${x.message_type==="text"&&isEmojiOnlyMessage(x.content)?"emoji-only-bubble":""}`}>
         {target.is_group&&x.sender_id!==Number(me.id)&&<div className="group-message-sender">{target.members?.find(member=>Number(member.id)===Number(x.sender_id))?.name||"Group member"}</div>}
         {x.is_pinned&&<div className="message-pinned"><Pin size={12}/> Pinned</div>}
         {x.is_forwarded&&<div className="message-forwarded"><Share2 size={12}/> Forwarded</div>}

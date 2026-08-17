@@ -325,6 +325,40 @@ async def toggle_like(
     return {"liked": my_reaction is not None, "my_reaction": my_reaction, "likes_count": len(rows), "reaction_counts": counts}
 
 
+@router.get("/{post_id}/reactions")
+def post_reactions(
+    post_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    post = db.get(Post, post_id)
+    if not post or not can_view(post, db, user):
+        raise HTTPException(404, "Post not found")
+
+    rows = (
+        db.query(Like, User)
+        .join(User, User.id == Like.user_id)
+        .filter(Like.post_id == post_id)
+        .order_by(Like.created_at.desc(), Like.id.desc())
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "reaction": like.reaction,
+                "created_at": like.created_at,
+                "user": {
+                    "id": reactor.id,
+                    "username": reactor.username,
+                    "name": reactor.name,
+                    "avatar_url": reactor.avatar_url,
+                },
+            }
+            for like, reactor in rows
+        ]
+    }
+
+
 @router.post("/{post_id}/comments")
 async def comment(
     post_id: int,
