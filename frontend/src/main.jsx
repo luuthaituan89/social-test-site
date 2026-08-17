@@ -53,9 +53,57 @@ function ConfirmHost(){
   </div></div>
 }
 function Avatar({user,size=42,onClick}){return user?.avatar_url?<img className="avatar clickable" style={{width:size,height:size}} src={asset(user.avatar_url)} onClick={onClick}/>:<div className="avatar avatar-fallback clickable" style={{width:size,height:size}} onClick={onClick}>{(user?.name||"?")[0]}</div>}
-function MetroMessageToasts({items,onOpen,onDismiss}){if(!items.length)return null;return <div className="metro-toast-stack" aria-live="polite" aria-label="New messages">{items.map(item=><article className="metro-message-toast" key={item.toastId} style={{"--toast-duration":`${item.duration}ms`}}><button className="metro-toast-main" onClick={()=>onOpen(item)}><Avatar user={{name:item.conversation_name,avatar_url:item.conversation_avatar_url}} size={48}/><span><small>{item.is_group?`${item.actor?.name||"Someone"} · ${item.conversation_name}`:"NEW MESSAGE"}</small><b>{item.is_group?item.conversation_name:item.actor?.name||item.conversation_name}</b><em>{item.displayPreview}</em></span></button><button className="metro-toast-close" aria-label="Dismiss notification" onClick={()=>onDismiss(item.toastId)}><X size={18}/></button><i className="metro-toast-timer"/></article>)}</div>}
+function MetroMessageToasts({items,onOpen,onDismiss}){if(!items.length)return null;return <div className="metro-toast-stack" aria-live="polite" aria-label="New notifications">{items.map(item=>{const activity=item.kind==="activity",avatar=activity?item.actor:{name:item.conversation_name,avatar_url:item.conversation_avatar_url};return <article className={`metro-message-toast ${activity?"metro-activity-toast":""}`} key={item.toastId} style={{"--toast-duration":`${item.duration}ms`}}><button className="metro-toast-main" onClick={()=>onOpen(item)}><Avatar user={avatar||{name:"SocialN"}} size={48}/><span><small>{activity?item.categoryLabel:item.is_group?`${item.actor?.name||"Someone"} · ${item.conversation_name}`:"NEW MESSAGE"}</small><b>{activity?item.actor?.name||"SocialN":item.is_group?item.conversation_name:item.actor?.name||item.conversation_name}</b><em>{activity?item.displayMessage:item.displayPreview}</em></span></button><button className="metro-toast-close" aria-label="Dismiss notification" onClick={()=>onDismiss(item.toastId)}><X size={18}/></button><i className="metro-toast-timer"/></article>})}</div>}
 function LanguagePicker({value,onChange,compact=false}){return <div className={`language-picker ${compact?"compact":""}`}><Languages size={18}/><select value={value} onChange={e=>onChange(e.target.value)} aria-label="Language">{LANGUAGES.map(language=><option key={language.code} value={language.code}>{language.label}</option>)}</select></div>}
-function Login({onLogin,language,onLanguageChange}){const[mode,setMode]=useState("login"),[f,setF]=useState({email:"",username:"",name:"",password:""}),[err,setErr]=useState("");async function sub(e){e.preventDefault();try{const d=await api(`/api/auth/${mode}`,{method:"POST",body:JSON.stringify(f)});localStorage.setItem("socialn_token",d.access_token);onLogin(d.user)}catch(e){setErr(e.message)}}return <div className="auth-shell"><div className="auth-stack"><div className="auth-card"><div className="brand big">Social<span>N</span></div><form onSubmit={sub}>{mode==="register"&&<><input placeholder="Full name" onChange={e=>setF({...f,name:e.target.value})}/><input placeholder="Username" onChange={e=>setF({...f,username:e.target.value})}/></>}<input type="email" placeholder="Email" onChange={e=>setF({...f,email:e.target.value})}/><input type="password" placeholder="Password" onChange={e=>setF({...f,password:e.target.value})}/>{err&&<div className="error">{err}</div>}<button className="primary wide">{mode==="login"?"Log in":"Register"}</button></form><button className="link-btn" onClick={()=>setMode(mode==="login"?"register":"login")}>{mode==="login"?"Create account":"Back to login"}</button></div><LanguagePicker compact value={language} onChange={onLanguageChange}/></div></div>}
+const AUTH_COPY={
+  en:{tagline:"Discover the people and moments that matter.",loginTitle:"Log in to SocialN",registerTitle:"Create your SocialN account",email:"Email address",password:"Password",name:"Full name",username:"Username",login:"Log in",register:"Create account",forgot:"Forgot password?",newAccount:"Create new account",back:"Already have an account? Log in",recovery:"Password recovery is not available yet.",community:"Share moments",chat:"Stay connected",language:"Choose language"},
+  vi:{tagline:"Khám phá những người và khoảnh khắc bạn quan tâm.",loginTitle:"Đăng nhập vào SocialN",registerTitle:"Tạo tài khoản SocialN",email:"Địa chỉ email",password:"Mật khẩu",name:"Họ và tên",username:"Tên người dùng",login:"Đăng nhập",register:"Tạo tài khoản",forgot:"Quên mật khẩu?",newAccount:"Tạo tài khoản mới",back:"Đã có tài khoản? Đăng nhập",recovery:"Tính năng khôi phục mật khẩu chưa khả dụng.",community:"Chia sẻ khoảnh khắc",chat:"Luôn kết nối",language:"Chọn ngôn ngữ"},
+  ko:{tagline:"소중한 사람과 순간을 발견하세요.",loginTitle:"SocialN에 로그인",registerTitle:"SocialN 계정 만들기",email:"이메일 주소",password:"비밀번호",name:"이름",username:"사용자 이름",login:"로그인",register:"계정 만들기",forgot:"비밀번호를 잊으셨나요?",newAccount:"새 계정 만들기",back:"계정이 있으신가요? 로그인",recovery:"비밀번호 복구 기능은 아직 제공되지 않습니다.",community:"순간을 공유하세요",chat:"계속 연결하세요",language:"언어 선택"},
+  ja:{tagline:"大切な人や瞬間を見つけよう。",loginTitle:"SocialNにログイン",registerTitle:"SocialNアカウントを作成",email:"メールアドレス",password:"パスワード",name:"氏名",username:"ユーザー名",login:"ログイン",register:"アカウントを作成",forgot:"パスワードを忘れた場合",newAccount:"新しいアカウントを作成",back:"アカウントをお持ちですか？ ログイン",recovery:"パスワード回復はまだ利用できません。",community:"瞬間を共有",chat:"つながりを保つ",language:"言語を選択"},
+  zh:{tagline:"发现你在意的人与精彩时刻。",loginTitle:"登录 SocialN",registerTitle:"创建 SocialN 帐户",email:"电子邮箱地址",password:"密码",name:"姓名",username:"用户名",login:"登录",register:"创建帐户",forgot:"忘记密码？",newAccount:"新建帐户",back:"已有帐户？登录",recovery:"密码找回功能暂不可用。",community:"分享精彩时刻",chat:"保持联系",language:"选择语言"},
+  th:{tagline:"ค้นพบผู้คนและช่วงเวลาที่คุณใส่ใจ",loginTitle:"เข้าสู่ระบบ SocialN",registerTitle:"สร้างบัญชี SocialN",email:"ที่อยู่อีเมล",password:"รหัสผ่าน",name:"ชื่อ-นามสกุล",username:"ชื่อผู้ใช้",login:"เข้าสู่ระบบ",register:"สร้างบัญชี",forgot:"ลืมรหัสผ่าน?",newAccount:"สร้างบัญชีใหม่",back:"มีบัญชีแล้ว? เข้าสู่ระบบ",recovery:"ยังไม่เปิดใช้การกู้คืนรหัสผ่าน",community:"แบ่งปันช่วงเวลา",chat:"เชื่อมต่อกันเสมอ",language:"เลือกภาษา"}
+};
+function Login({onLogin,language,onLanguageChange}){
+  const[mode,setMode]=useState("login"),[f,setF]=useState({email:"",username:"",name:"",password:""}),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
+  const copy=AUTH_COPY[language]||AUTH_COPY.en;
+  function changeMode(next){setMode(next);setErr("")}
+  async function sub(e){e.preventDefault();setBusy(true);setErr("");try{const d=await api(`/api/auth/${mode}`,{method:"POST",body:JSON.stringify(f)});localStorage.setItem("socialn_token",d.access_token);onLogin(d.user)}catch(e){setErr(e.message)}finally{setBusy(false)}}
+  return <div className="auth-shell social-auth-shell">
+    <main className="social-auth-main">
+      <section className="social-auth-intro">
+        <div className="social-auth-brand" aria-label="SocialN">Social<span>N</span></div>
+        <div className="social-auth-hero">
+          <h1>{copy.tagline}</h1>
+          <div className="social-auth-visual" aria-hidden="true">
+            <div className="auth-scene-card auth-scene-main"><span className="auth-scene-avatar">S</span><div><b>SocialN</b><small>{copy.community}</small></div><i>♥</i></div>
+            <div className="auth-scene-card auth-scene-photo"><span>☀</span><strong>Moments</strong></div>
+            <div className="auth-scene-card auth-scene-chat"><span>☺</span><div><b>{copy.chat}</b><small>SocialN Messenger</small></div></div>
+            <div className="auth-scene-reaction">♥</div>
+          </div>
+        </div>
+      </section>
+      <section className="social-auth-panel">
+        <div className="auth-card social-auth-card">
+          <div className="auth-mobile-brand">Social<span>N</span></div>
+          <h2>{mode==="login"?copy.loginTitle:copy.registerTitle}</h2>
+          <form onSubmit={sub}>
+            {mode==="register"&&<><input required autoComplete="name" placeholder={copy.name} value={f.name} onChange={e=>setF({...f,name:e.target.value})}/><input required autoComplete="username" placeholder={copy.username} value={f.username} onChange={e=>setF({...f,username:e.target.value})}/></>}
+            <input required type="email" autoComplete="email" placeholder={copy.email} value={f.email} onChange={e=>setF({...f,email:e.target.value})}/>
+            <input required type="password" autoComplete={mode==="login"?"current-password":"new-password"} placeholder={copy.password} value={f.password} onChange={e=>setF({...f,password:e.target.value})}/>
+            {err&&<div className="error" role="alert">{err}</div>}
+            <button className="primary wide auth-submit" disabled={busy}>{busy?"…":mode==="login"?copy.login:copy.register}</button>
+          </form>
+          {mode==="login"&&<button type="button" className="auth-forgot" onClick={()=>setErr(copy.recovery)}>{copy.forgot}</button>}
+          <div className="auth-divider"><span/></div>
+          <button type="button" className="auth-create" onClick={()=>changeMode(mode==="login"?"register":"login")}>{mode==="login"?copy.newAccount:copy.back}</button>
+        </div>
+      </section>
+    </main>
+    <footer className="social-auth-languages" aria-label={copy.language}>
+      {LANGUAGES.map(item=><button type="button" className={language===item.code?"active":""} key={item.code} onClick={()=>onLanguageChange(item.code)}>{item.label}</button>)}
+    </footer>
+  </div>
+}
 
 function PostComposer({onCreated}){
   const composerInputRef=useRef(null);
@@ -137,7 +185,7 @@ function PostCard({post,me,onOpenProfile,onUpdated,onDeleted}){
   async function openPostAlbum(){await onOpenProfile?.(post.author.id);setTimeout(()=>document.getElementById(`profile-albums-${post.author.id}`)?.scrollIntoView({behavior:"smooth",block:"start"}),80)}
   const privacyLabel={public:"Public",friends:"Friends",only_me:"Only me"}[post.privacy]||post.privacy;
 
-  return <article className="card post">
+  return <article className="card post" id={`post-${post.id}`}>
     <div className="post-head"><Avatar user={post.author} onClick={()=>onOpenProfile?.(post.author.id)}/><div className="post-author"><button className="name-link" onClick={()=>onOpenProfile?.(post.author.id)}><b>{post.author.name}</b></button><div className="privacy-line">{privacyLabel} · {formatDateTime(post.created_at)}</div></div>
       {post.is_owner&&<div className="post-menu-wrap"><button className="icon-btn" onClick={()=>setMenu(!menu)}><MoreHorizontal size={20}/></button>{menu&&<div className="post-menu"><button onClick={()=>{setEditing(true);setMenu(false)}}><Edit2 size={16}/> Edit</button><button className="danger-link" onClick={remove}><Trash2 size={16}/> Delete</button></div>}</div>}
     </div>
@@ -1152,8 +1200,8 @@ function SettingsPage({user,onUserUpdated,openProfile,openMessage,theme="dark",o
       {activeStatusMessage&&<div className="success-notice">{activeStatusMessage}</div>}
     </div>
     <div className="settings-section message-notification-settings">
-      <h3>Message notifications</h3>
-      <p className="muted small">Control Metro-style alerts for new direct and group messages on this browser.</p>
+      <h3>Push notifications</h3>
+      <p className="muted small">Control Metro-style alerts for messages, friend requests, comments, reactions and other activity on this browser.</p>
       <label className="settings-switch-row"><span><b>In-app notifications</b><small>Show a Metro notification tile while SocialN is open.</small></span><input type="checkbox" role="switch" checked={notificationPrefs.enabled} onChange={e=>changeNotificationPref("enabled",e.target.checked)}/></label>
       <label className="settings-switch-row"><span><b>Desktop notifications</b><small>Show an operating-system notification when this tab is in the background.</small></span><input type="checkbox" role="switch" checked={notificationPrefs.desktop} disabled={!notificationPrefs.enabled} onChange={e=>changeNotificationPref("desktop",e.target.checked)}/></label>
       <label className="settings-switch-row"><span><b>Notification sound</b><small>Play a short sound for messages that are not muted.</small></span><input type="checkbox" role="switch" checked={notificationPrefs.sound} disabled={!notificationPrefs.enabled} onChange={e=>changeNotificationPref("sound",e.target.checked)}/></label>
@@ -1264,9 +1312,9 @@ function RoutedApp(){
   const[language,setLanguage]=useState(()=>localStorage.getItem("socialn_language")||"vi");
   const[timezone,setTimezone]=useState(()=>localStorage.getItem("socialn_timezone")||"auto");
   const[sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem("socialn_sidebar_collapsed")==="true"),[mobileSidebarOpen,setMobileSidebarOpen]=useState(false);
-  const[notificationPrefs,setNotificationPrefs]=useState(readMessageNotificationPrefs),[messageToasts,setMessageToasts]=useState([]);
+  const[notificationPrefs,setNotificationPrefs]=useState(readMessageNotificationPrefs),[messageToasts,setMessageToasts]=useState([]),[activityToasts,setActivityToasts]=useState([]);
   const searchTimerRef=useRef(null);
-  const notificationPrefsRef=useRef(notificationPrefs),viewRef=useRef(view),targetRef=useRef(target),seenMessageNotificationsRef=useRef(new Set());
+  const notificationPrefsRef=useRef(notificationPrefs),viewRef=useRef(view),targetRef=useRef(target),seenMessageNotificationsRef=useRef(new Set()),knownNotificationIdsRef=useRef(new Set()),notificationBaselineReadyRef=useRef(false);
 
   useEffect(()=>{document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme;localStorage.setItem("socialn_theme",theme)},[theme]);
   useEffect(()=>{setSiteLanguage(language)},[language]);
@@ -1286,7 +1334,7 @@ function RoutedApp(){
 
   async function loadFeed(){try{const rows=await api("/api/posts");setFeed(Array.isArray(rows)?rows:[])}catch(e){console.error(e);setFeed([])}}
   async function loadC(){try{const rows=await api("/api/chat/conversations");setConversations((Array.isArray(rows)?rows:[]).filter(c=>c?.is_group||c?.user?.id))}catch(e){console.error(e);setConversations([])}}
-  async function loadN(){try{const d=await api("/api/notifications");setNotifs(d.items||[]);setUnread(d.unread_count||0)}catch(e){console.error(e)}}
+  async function loadN({push=false}={}){try{const d=await api("/api/notifications"),items=d.items||[],fresh=push&&notificationBaselineReadyRef.current?items.filter(item=>!item.is_read&&!knownNotificationIdsRef.current.has(item.id)&&!["new_message","group_mention"].includes(item.type)):[];items.forEach(item=>knownNotificationIdsRef.current.add(item.id));notificationBaselineReadyRef.current=true;setNotifs(items);setUnread(d.unread_count||0);fresh.slice().reverse().forEach(handleActivityNotification);return d}catch(e){console.error(e);return null}}
   async function loadMessageUnread(){try{const d=await api("/api/chat/unread-count");setMessageUnread(d.unread_count||0)}catch(e){console.error(e)}}
   async function refresh(){loadFeed();loadN();loadC();loadMessageUnread();try{const [f,r,sent,s]=await Promise.all([api("/api/friends"),api("/api/friends/requests"),api("/api/friends/requests/sent"),api("/api/users/suggestions/people")]);setFriends(f);setRequests(r);setSentRequests(sent);setSuggestions(s)}catch(e){console.error(e)}}
 
@@ -1321,7 +1369,7 @@ function RoutedApp(){
     const alreadyOpen=viewRef.current==="chat"&&(payload.is_group?current?.is_group&&Number(current.group_chat_id)===Number(payload.group_chat_id):!current?.is_group&&Number(current?.id)===Number(payload.actor?.id));
     if(alreadyOpen&&document.visibilityState==="visible")return;
     const displayPreview=prefs.preview==="hidden"?"You have a new message":prefs.preview==="sender"?"New message":payload.preview||"New message";
-    const item={...payload,displayPreview,duration:Number(prefs.duration)||6000,toastId:`message-${id}`};
+    const item={...payload,kind:"message",displayPreview,duration:Number(prefs.duration)||6000,toastId:`message-${id}`};
     if(prefs.sound)playMessageNotificationSound();
     if(document.visibilityState==="visible"){
       setMessageToasts(rows=>[item,...rows.filter(row=>row.toastId!==item.toastId)].slice(0,4));
@@ -1332,6 +1380,22 @@ function RoutedApp(){
       nativeNotification.onclick=()=>{window.focus();nativeNotification.close();openMessageNotification(item)};
     }
   }
+  function handleActivityNotification(notification){
+    const prefs=notificationPrefsRef.current;if(!prefs.enabled)return;
+    const labels={friend_request:"FRIEND REQUEST",friend_accept:"NEW FRIEND",post_comment:"NEW COMMENT",post_reaction:"NEW REACTION",post_share:"POST SHARED",message_reaction:"MESSAGE REACTION",relationship_request:"RELATIONSHIP REQUEST",relationship_accepted:"RELATIONSHIP UPDATE",relationship_declined:"RELATIONSHIP UPDATE",group_welcome:"GROUP UPDATE"};
+    const displayMessage=prefs.preview==="hidden"?"You have a new notification":prefs.preview==="sender"?"New activity on SocialN":notification.message;
+    const item={...notification,notification,kind:"activity",categoryLabel:labels[notification.type]||"SOCIALN UPDATE",displayMessage,duration:Number(prefs.duration)||6000,toastId:`activity-${notification.id}`};
+    if(prefs.sound)playMessageNotificationSound();
+    if(document.visibilityState==="visible"){
+      setActivityToasts(rows=>[item,...rows.filter(row=>row.toastId!==item.toastId)].slice(0,4));
+      window.setTimeout(()=>setActivityToasts(rows=>rows.filter(row=>row.toastId!==item.toastId)),item.duration);
+    }else if(prefs.desktop&&"Notification" in window&&Notification.permission==="granted"){
+      const title=prefs.preview==="hidden"?"SocialN":notification.actor?.name||labels[notification.type]||"SocialN";
+      const nativeNotification=new Notification(title,{body:displayMessage,icon:asset(notification.actor?.avatar_url)||undefined,tag:`socialn-notification-${notification.id}`,silent:true});
+      nativeNotification.onclick=()=>{window.focus();nativeNotification.close();openActivityNotification(item)};
+    }
+  }
+  function openActivityNotification(item){setActivityToasts(rows=>rows.filter(row=>row.toastId!==item.toastId));read(item.notification)}
 
   async function resolvePath(replace=false){
     const path=currentPath();
@@ -1353,16 +1417,16 @@ function RoutedApp(){
   }
 
   useEffect(()=>{if(tok())api("/api/users/me").then(setUser).catch(()=>{localStorage.removeItem("socialn_token");window.history.replaceState({},"","/")})},[]);
-  useEffect(()=>{if(!user)return;refresh();resolvePath(true);const onPop=()=>resolvePath(true);window.addEventListener("popstate",onPop);const w=new WebSocket(`${WS}/api/notifications/ws?token=${encodeURIComponent(tok())}`);w.onopen=()=>w.send("ready");w.onmessage=async event=>{loadN();loadMessageUnread();loadC();try{const payload=JSON.parse(event.data);handleMessageNotification(payload);if(["relationship_accepted","relationship_declined","relationship_unlinked"].includes(payload?.reason)){const updated=await api(`/api/users/${user.id}/profile`);setProfile(current=>Number(current?.user?.id)===Number(user.id)?updated:current);setUser(await api("/api/users/me"))}}catch{}};return()=>{window.removeEventListener("popstate",onPop);w.close()}},[user?.id]);
+  useEffect(()=>{if(!user)return;let w=null,cancelled=false;refresh();resolvePath(true);const onPop=()=>resolvePath(true);window.addEventListener("popstate",onPop);loadN().then(()=>{if(cancelled)return;w=new WebSocket(`${WS}/api/notifications/ws?token=${encodeURIComponent(tok())}`);w.onopen=()=>w.send("ready");w.onmessage=async event=>{loadMessageUnread();loadC();try{const payload=JSON.parse(event.data);handleMessageNotification(payload);await loadN({push:payload?.type!=="message_notification"});if(["relationship_accepted","relationship_declined","relationship_unlinked"].includes(payload?.reason)){const updated=await api(`/api/users/${user.id}/profile`);setProfile(current=>Number(current?.user?.id)===Number(user.id)?updated:current);setUser(await api("/api/users/me"))}}catch{await loadN({push:true})}}});return()=>{cancelled=true;window.removeEventListener("popstate",onPop);w?.close()}},[user?.id]);
 
   function query(v){setSearch(v);clearTimeout(searchTimerRef.current);if(!v.trim()){setResults([]);return}searchTimerRef.current=setTimeout(async()=>{try{setResults(await api(`/api/users/search?q=${encodeURIComponent(v.trim())}`))}catch{setResults([])}},450)}
-  async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.entity_type==="group"&&n.entity_id){setGroupId(n.entity_id);go(`/groups/${n.entity_id}`,"groups")}else if(n.entity_type==="chat_group"&&n.entity_id){try{const d=await api(`/api/chat/group-conversations/${n.entity_id}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true});go(`/messages/group/${n.entity_id}`,"chat")}catch(e){setRouteError(e.message)}}else if(n.type==="new_message"&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
+  async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.entity_type==="group"&&n.entity_id){setGroupId(n.entity_id);go(`/groups/${n.entity_id}`,"groups")}else if(n.entity_type==="chat_group"&&n.entity_id){try{const d=await api(`/api/chat/group-conversations/${n.entity_id}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true});go(`/messages/group/${n.entity_id}`,"chat")}catch(e){setRouteError(e.message)}}else if(["new_message","message_reaction"].includes(n.type)&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.entity_type==="post"&&n.entity_id){go("/","home");await loadFeed();window.setTimeout(()=>document.getElementById(`post-${n.entity_id}`)?.scrollIntoView({behavior:"smooth",block:"center"}),120)}else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
   async function respondRelationship(n,action){try{await api(`/api/users/relationship-requests/${n.entity_id}/${action}`,{method:"POST"});await loadN();const updated=await api("/api/users/me");setUser(updated);if(view==="profile"&&Number(profile?.user?.id)===Number(user.id))await reloadProfile(user.id)}catch(e){alert(e.message)}}
   function logout(){localStorage.removeItem("socialn_token");window.history.replaceState({},"","/");setUser(null)}
   function toggleSidebar(){if(window.matchMedia("(max-width: 900px)").matches)setMobileSidebarOpen(value=>!value);else setSidebarCollapsed(value=>!value)}
 
   if(!user)return <Login language={language} onLanguageChange={setLanguage} onLogin={u=>{setUser(u);window.history.replaceState({},"","/")}}/>;
-  return <div><ConfirmHost/><MetroMessageToasts items={messageToasts} onOpen={openMessageNotification} onDismiss={id=>setMessageToasts(rows=>rows.filter(row=>row.toastId!==id))}/>
+  return <div><ConfirmHost/><MetroMessageToasts items={[...messageToasts,...activityToasts].slice(0,4)} onOpen={item=>item.kind==="activity"?openActivityNotification(item):openMessageNotification(item)} onDismiss={id=>{setMessageToasts(rows=>rows.filter(row=>row.toastId!==id));setActivityToasts(rows=>rows.filter(row=>row.toastId!==id))}}/>
     <header className="topbar"><button className="sidebar-toggle" onClick={toggleSidebar} aria-label={mobileSidebarOpen||!sidebarCollapsed?"Close navigation menu":"Open navigation menu"} aria-expanded={mobileSidebarOpen||!sidebarCollapsed}><Menu size={23}/></button><div className="brand" onClick={()=>go("/","home")}>Social<span>N</span></div><div className="search"><Search/><input value={search} onChange={e=>query(e.target.value)} placeholder="Search SocialN..."/>{results.length>0&&<div className="search-results">{results.map(u=><button key={u.id} onClick={()=>{openProfile(u.id);setResults([]);setSearch("")}}><Avatar user={u}/><span>{u.name}<small>@{u.username}</small></span></button>)}</div>}</div>
       <div className="top-actions">
         <button className="message-icon-btn top-messages" title="Messages" onClick={()=>go("/messages","chat")}><MessageCircle/>{messageUnread>0&&<span className="badge">{messageUnread>99?"99+":messageUnread}</span>}</button>

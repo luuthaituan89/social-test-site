@@ -460,3 +460,105 @@ input:focus,textarea:focus,select:focus,
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{
   border-color:transparent!important;outline:0!important;box-shadow:none!important
 }
+
+/* Text avatars must keep their own centering layout inside every button. */
+.avatar-fallback{
+  display:grid!important;place-items:center!important;padding:0!important;
+  line-height:1!important;text-align:center!important
+}
+.account-trigger img.avatar{display:block}
+.account-trigger .avatar-fallback{display:grid!important}
+
+/* Facebook-inspired authentication layout with SocialN's Metro identity. */
+.social-auth-shell{
+  min-height:100vh;padding:0;display:grid;grid-template-rows:minmax(0,1fr) auto;
+  background:var(--metro-bg);color:var(--metro-text)
+}
+.social-auth-main{
+  width:min(1360px,100%);min-height:calc(100vh - 72px);margin:auto;
+  display:grid;grid-template-columns:minmax(0,1.08fr) minmax(430px,.92fr)
+}
+.social-auth-intro{padding:42px clamp(36px,5vw,76px);display:flex;flex-direction:column;min-width:0}
+.social-auth-brand,.auth-mobile-brand{
+  font-size:42px;font-weight:400;letter-spacing:-2.6px;line-height:1;color:var(--metro-text)
+}
+.social-auth-brand span,.auth-mobile-brand span{color:#168de2}
+.social-auth-hero{flex:1;display:flex;align-items:center;gap:40px;min-height:570px}
+.social-auth-hero h1{
+  position:relative;z-index:2;width:min(480px,60%);margin:0;font-size:clamp(46px,5vw,76px);
+  line-height:1.04;letter-spacing:-3.4px;font-weight:750;text-wrap:balance
+}
+.social-auth-hero h1::after{content:"";display:block;width:92px;height:8px;margin-top:28px;background:#168de2}
+.social-auth-visual{position:relative;flex:1;min-width:250px;height:470px}
+.auth-scene-card{
+  position:absolute;display:flex;align-items:center;gap:13px;padding:17px;background:var(--metro-surface);
+  color:var(--metro-text);box-shadow:0 22px 50px #0005
+}
+.auth-scene-card b,.auth-scene-card small{display:block}.auth-scene-card small{margin-top:4px;color:var(--metro-muted)}
+.auth-scene-main{top:50px;right:8px;width:270px;height:142px;border-top:7px solid #168de2}
+.auth-scene-main i{margin-left:auto;color:#f43f5e;font-size:38px;font-style:normal}
+.auth-scene-avatar{width:58px;height:58px;display:grid;place-items:center;background:linear-gradient(135deg,#168de2,#7c3aed);color:#fff;font-size:25px}
+.auth-scene-photo{
+  top:170px;left:-32px;width:205px;height:235px;align-items:flex-end;
+  background:linear-gradient(145deg,#168de2 0 43%,#087f8c 43% 69%,#233647 69%);overflow:hidden
+}
+.auth-scene-photo span{position:absolute;right:20px;top:18px;color:#ffe08a;font-size:42px}
+.auth-scene-photo strong{font-size:22px;color:#fff}
+.auth-scene-chat{right:0;bottom:18px;width:275px;min-height:105px;border-left:7px solid #8b5cf6}
+.auth-scene-chat>span{font-size:38px;color:#facc15}
+.auth-scene-reaction{
+  position:absolute;right:4px;top:176px;width:66px;height:66px;display:grid;place-items:center;
+  background:#f43f5e;color:white;border-radius:50%;font-size:32px;box-shadow:0 12px 30px #0005
+}
+.social-auth-panel{padding:44px clamp(34px,5vw,74px);display:grid;place-items:center;background:var(--metro-surface)}
+.social-auth-card{
+  width:min(550px,100%);padding:18px 0;background:transparent!important;border:0!important;
+  box-shadow:none!important
+}
+.social-auth-card h2{margin:0 0 20px;font-size:21px;letter-spacing:-.3px}
+.social-auth-card form{display:grid;gap:11px;margin:0}
+.social-auth-card input{
+  width:100%;min-height:60px;padding:0 18px;background:var(--metro-bg);color:var(--metro-text);
+  border:0!important;border-radius:2px;font-size:16px
+}
+.social-auth-card input::placeholder{color:var(--metro-muted);opacity:1}
+.social-auth-card .error{margin:0;border-radius:2px;background:#541d1d;color:#ffd4d4}
+.auth-submit{min-height:52px;border-radius:2px!important;background:#168de2!important;font-size:17px}
+.auth-submit:disabled{opacity:.65;cursor:wait}
+.auth-forgot{display:block;margin:17px auto 0;padding:5px;background:transparent;color:#55b9ff;font-weight:600}
+.auth-forgot:hover{text-decoration:underline}
+.auth-divider{display:flex;align-items:center;height:35px}.auth-divider span{width:100%;height:1px;background:color-mix(in srgb,var(--metro-muted) 35%,transparent)}
+.auth-create{
+  width:100%;min-height:49px;background:var(--metro-surface-2);color:var(--metro-text);
+  border-radius:2px;font-weight:700;font-size:16px
+}
+.auth-create:hover{background:#168de2;color:#fff}
+.auth-mobile-brand{display:none;margin-bottom:26px;text-align:center}
+.social-auth-languages{
+  min-height:72px;padding:18px clamp(24px,5vw,76px);display:flex;align-items:center;justify-content:center;
+  gap:10px 24px;flex-wrap:wrap;background:var(--metro-surface);color:var(--metro-muted)
+}
+.social-auth-languages button{padding:5px 0;background:transparent;color:inherit;font-size:13px}
+.social-auth-languages button:hover,.social-auth-languages button.active{color:#55b9ff}
+.social-auth-languages button.active{box-shadow:inset 0 -2px #168de2}
+:root[data-theme="light"] .social-auth-panel,:root[data-theme="light"] .social-auth-languages{background:#fff}
+:root[data-theme="light"] .social-auth-card input{background:#f1f4f8;color:#171717}
+:root[data-theme="light"] .auth-create{background:#e7eef7;color:#172033}
+:root[data-theme="light"] .auth-create:hover{background:#087fce;color:#fff}
+:root[data-theme="light"] .auth-scene-card{box-shadow:0 22px 50px #35516d2b}
+
+@media(max-width:980px){
+  .social-auth-main{grid-template-columns:minmax(0,.9fr) minmax(410px,1.1fr)}
+  .social-auth-intro{padding:36px 28px}.social-auth-hero h1{width:100%;font-size:52px}
+  .social-auth-visual{display:none}.social-auth-panel{padding:34px}
+}
+@media(max-width:720px){
+  .social-auth-main{display:block;min-height:calc(100vh - 100px)}
+  .social-auth-intro{display:none}.social-auth-panel{min-height:calc(100vh - 100px);padding:30px 22px}
+  .social-auth-card{padding:10px 0}.auth-mobile-brand{display:block}.social-auth-card h2{text-align:center}
+  .social-auth-languages{min-height:100px;padding:15px 20px;gap:8px 18px}
+}
+@media(max-width:420px){
+  .social-auth-panel{padding:22px 15px}.auth-mobile-brand{font-size:38px}
+  .social-auth-card h2{font-size:18px}.social-auth-card input{min-height:55px}
+}

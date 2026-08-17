@@ -6,6 +6,7 @@ from ..models import User, Friendship, FriendshipStatus, Block, Notification
 from ..auth import get_current_user
 from ..notifications import create_notification
 from ..activity import log_activity
+from .notifications import notification_ws
 
 router = APIRouter(prefix="/api/friends", tags=["Friends"])
 
@@ -71,7 +72,7 @@ def cancel_sent_request(request_id: int, db: Session = Depends(get_db), user: Us
 
 
 @router.post("/{target_id}")
-def send_request(target_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+async def send_request(target_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     if target_id == user.id:
         raise HTTPException(400, "Cannot add yourself")
     if not db.get(User, target_id):
@@ -102,11 +103,12 @@ def send_request(target_id: int, db: Session = Depends(get_db), user: User = Dep
         entity_type="friendship", entity_id=friendship.id,
     )
     db.commit()
+    await notification_ws.send(target_id, {"type": "notification_refresh", "reason": "friend_request"})
     return {"message": "Friend request sent"}
 
 
 @router.post("/{request_id}/accept")
-def accept_request(request_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+async def accept_request(request_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     row = db.get(Friendship, request_id)
     if not row or row.addressee_id != user.id:
         raise HTTPException(404, "Request not found")
@@ -120,6 +122,7 @@ def accept_request(request_id: int, db: Session = Depends(get_db), user: User = 
         entity_type="friendship", entity_id=row.id,
     )
     db.commit()
+    await notification_ws.send(row.requester_id, {"type": "notification_refresh", "reason": "friend_accept"})
     return {"message": "Friend request accepted"}
 
 

@@ -326,7 +326,7 @@ async def toggle_like(
 
 
 @router.post("/{post_id}/comments")
-def comment(
+async def comment(
     post_id: int,
     data: CommentCreate,
     db: Session = Depends(get_db),
@@ -361,6 +361,7 @@ def comment(
 
     db.commit()
     db.refresh(row)
+    await notification_ws.send(post.author_id, {"type": "notification_refresh", "reason": "post_comment"})
 
     return serialize_comment(row)
 
@@ -386,7 +387,7 @@ def delete_comment(
 
 
 @router.post("/{post_id}/share")
-def share(
+async def share(
     post_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -417,4 +418,5 @@ def share(
 
     db.commit()
     db.refresh(shared)
+    await notification_ws.send(source.author_id, {"type": "notification_refresh", "reason": "post_share"})
     return serialize(shared, db, user)

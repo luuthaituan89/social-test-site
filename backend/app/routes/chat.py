@@ -685,9 +685,11 @@ async def react_to_message(message_id: int, data: ReactionIn, db: Session = Depe
     other_id = next((x for x in participant_ids if x != user.id), user.id)
     recipient_restricted_reactor = msg.sender_id != user.id and has_restricted(db, msg.sender_id, user.id)
     if current and msg.sender_id != user.id and not recipient_restricted_reactor:
+        chat_group = db.query(ChatGroup).filter(ChatGroup.conversation_id == conv.id).first()
         create_notification(db, user_id=msg.sender_id, actor_id=user.id, type="message_reaction",
                             message=f"{user.name} reacted {REACTIONS[current]} to your message",
-                            entity_type="message", entity_id=msg.id)
+                            entity_type="chat_group" if chat_group else "conversation",
+                            entity_id=chat_group.id if chat_group else conv.id)
     db.commit()
     counts, mine = message_reaction_state(db, message_id, user.id)
     payload = {"type": "message_reaction", "message_id": message_id, "reaction_counts": counts,
