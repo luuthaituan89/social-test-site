@@ -56,14 +56,14 @@ function Avatar({user,size=42,onClick}){return user?.avatar_url?<img className="
 function MetroMessageToasts({items,onOpen,onDismiss}){if(!items.length)return null;return <div className="metro-toast-stack" aria-live="polite" aria-label="New notifications">{items.map(item=>{const activity=item.kind==="activity",avatar=activity?item.actor:{name:item.conversation_name,avatar_url:item.conversation_avatar_url};return <article className={`metro-message-toast ${activity?"metro-activity-toast":""}`} key={item.toastId} style={{"--toast-duration":`${item.duration}ms`}}><button className="metro-toast-main" onClick={()=>onOpen(item)}><Avatar user={avatar||{name:"SocialN"}} size={48}/><span><small>{activity?item.categoryLabel:item.is_group?`${item.actor?.name||"Someone"} · ${item.conversation_name}`:"NEW MESSAGE"}</small><b>{activity?item.actor?.name||"SocialN":item.is_group?item.conversation_name:item.actor?.name||item.conversation_name}</b><em>{activity?item.displayMessage:item.displayPreview}</em></span></button><button className="metro-toast-close" aria-label="Dismiss notification" onClick={()=>onDismiss(item.toastId)}><X size={18}/></button><i className="metro-toast-timer"/></article>})}</div>}
 function LanguagePicker({value,onChange,compact=false}){return <div className={`language-picker ${compact?"compact":""}`}><Languages size={18}/><select value={value} onChange={e=>onChange(e.target.value)} aria-label="Language">{LANGUAGES.map(language=><option key={language.code} value={language.code}>{language.label}</option>)}</select></div>}
 const AUTH_COPY={
-  en:{tagline:"Discover the people and moments that matter.",loginTitle:"Log in to SocialN",registerTitle:"Create your SocialN account",email:"Email address",password:"Password",name:"Full name",username:"Username",login:"Log in",register:"Create account",forgot:"Forgot password?",newAccount:"Create new account",back:"Already have an account? Log in",recovery:"Password recovery is not available yet.",community:"Share moments",chat:"Stay connected",language:"Choose language"},
-  vi:{tagline:"Khám phá những người và khoảnh khắc bạn quan tâm.",loginTitle:"Đăng nhập vào SocialN",registerTitle:"Tạo tài khoản SocialN",email:"Địa chỉ email",password:"Mật khẩu",name:"Họ và tên",username:"Tên người dùng",login:"Đăng nhập",register:"Tạo tài khoản",forgot:"Quên mật khẩu?",newAccount:"Tạo tài khoản mới",back:"Đã có tài khoản? Đăng nhập",recovery:"Tính năng khôi phục mật khẩu chưa khả dụng.",community:"Chia sẻ khoảnh khắc",chat:"Luôn kết nối",language:"Chọn ngôn ngữ"},
-  ko:{tagline:"소중한 사람과 순간을 발견하세요.",loginTitle:"SocialN에 로그인",registerTitle:"SocialN 계정 만들기",email:"이메일 주소",password:"비밀번호",name:"이름",username:"사용자 이름",login:"로그인",register:"계정 만들기",forgot:"비밀번호를 잊으셨나요?",newAccount:"새 계정 만들기",back:"계정이 있으신가요? 로그인",recovery:"비밀번호 복구 기능은 아직 제공되지 않습니다.",community:"순간을 공유하세요",chat:"계속 연결하세요",language:"언어 선택"},
-  ja:{tagline:"大切な人や瞬間を見つけよう。",loginTitle:"SocialNにログイン",registerTitle:"SocialNアカウントを作成",email:"メールアドレス",password:"パスワード",name:"氏名",username:"ユーザー名",login:"ログイン",register:"アカウントを作成",forgot:"パスワードを忘れた場合",newAccount:"新しいアカウントを作成",back:"アカウントをお持ちですか？ ログイン",recovery:"パスワード回復はまだ利用できません。",community:"瞬間を共有",chat:"つながりを保つ",language:"言語を選択"},
-  zh:{tagline:"发现你在意的人与精彩时刻。",loginTitle:"登录 SocialN",registerTitle:"创建 SocialN 帐户",email:"电子邮箱地址",password:"密码",name:"姓名",username:"用户名",login:"登录",register:"创建帐户",forgot:"忘记密码？",newAccount:"新建帐户",back:"已有帐户？登录",recovery:"密码找回功能暂不可用。",community:"分享精彩时刻",chat:"保持联系",language:"选择语言"},
-  th:{tagline:"ค้นพบผู้คนและช่วงเวลาที่คุณใส่ใจ",loginTitle:"เข้าสู่ระบบ SocialN",registerTitle:"สร้างบัญชี SocialN",email:"ที่อยู่อีเมล",password:"รหัสผ่าน",name:"ชื่อ-นามสกุล",username:"ชื่อผู้ใช้",login:"เข้าสู่ระบบ",register:"สร้างบัญชี",forgot:"ลืมรหัสผ่าน?",newAccount:"สร้างบัญชีใหม่",back:"มีบัญชีแล้ว? เข้าสู่ระบบ",recovery:"ยังไม่เปิดใช้การกู้คืนรหัสผ่าน",community:"แบ่งปันช่วงเวลา",chat:"เชื่อมต่อกันเสมอ",language:"เลือกภาษา"}
+  en:{tagline:"Connect with what matters to you.",loginTitle:"Log in to SocialN",registerTitle:"Create your SocialN account",email:"Email address",password:"Password",name:"Full name",username:"Username",login:"Log in",register:"Create account",forgot:"Forgot password?",newAccount:"Create new account",back:"Already have an account? Log in",recovery:"Password recovery is not available yet.",community:"Share moments",chat:"Stay connected",language:"Choose language",lightMode:"Light mode",darkMode:"Dark mode"},
+  vi:{tagline:"Kết nối những điều bạn yêu thích.",loginTitle:"Đăng nhập vào SocialN",registerTitle:"Tạo tài khoản SocialN",email:"Địa chỉ email",password:"Mật khẩu",name:"Họ và tên",username:"Tên người dùng",login:"Đăng nhập",register:"Tạo tài khoản",forgot:"Quên mật khẩu?",newAccount:"Tạo tài khoản mới",back:"Đã có tài khoản? Đăng nhập",recovery:"Tính năng khôi phục mật khẩu chưa khả dụng.",community:"Chia sẻ khoảnh khắc",chat:"Luôn kết nối",language:"Chọn ngôn ngữ",lightMode:"Chế độ sáng",darkMode:"Chế độ tối"},
+  ko:{tagline:"소중한 사람과 순간을 발견하세요.",loginTitle:"SocialN에 로그인",registerTitle:"SocialN 계정 만들기",email:"이메일 주소",password:"비밀번호",name:"이름",username:"사용자 이름",login:"로그인",register:"계정 만들기",forgot:"비밀번호를 잊으셨나요?",newAccount:"새 계정 만들기",back:"계정이 있으신가요? 로그인",recovery:"비밀번호 복구 기능은 아직 제공되지 않습니다.",community:"순간을 공유하세요",chat:"계속 연결하세요",language:"언어 선택",lightMode:"라이트 모드",darkMode:"다크 모드"},
+  ja:{tagline:"大切な人や瞬間を見つけよう。",loginTitle:"SocialNにログイン",registerTitle:"SocialNアカウントを作成",email:"メールアドレス",password:"パスワード",name:"氏名",username:"ユーザー名",login:"ログイン",register:"アカウントを作成",forgot:"パスワードを忘れた場合",newAccount:"新しいアカウントを作成",back:"アカウントをお持ちですか？ ログイン",recovery:"パスワード回復はまだ利用できません。",community:"瞬間を共有",chat:"つながりを保つ",language:"言語を選択",lightMode:"ライトモード",darkMode:"ダークモード"},
+  zh:{tagline:"发现你在意的人与精彩时刻。",loginTitle:"登录 SocialN",registerTitle:"创建 SocialN 帐户",email:"电子邮箱地址",password:"密码",name:"姓名",username:"用户名",login:"登录",register:"创建帐户",forgot:"忘记密码？",newAccount:"新建帐户",back:"已有帐户？登录",recovery:"密码找回功能暂不可用。",community:"分享精彩时刻",chat:"保持联系",language:"选择语言",lightMode:"浅色模式",darkMode:"深色模式"},
+  th:{tagline:"ค้นพบผู้คนและช่วงเวลาที่คุณใส่ใจ",loginTitle:"เข้าสู่ระบบ SocialN",registerTitle:"สร้างบัญชี SocialN",email:"ที่อยู่อีเมล",password:"รหัสผ่าน",name:"ชื่อ-นามสกุล",username:"ชื่อผู้ใช้",login:"เข้าสู่ระบบ",register:"สร้างบัญชี",forgot:"ลืมรหัสผ่าน?",newAccount:"สร้างบัญชีใหม่",back:"มีบัญชีแล้ว? เข้าสู่ระบบ",recovery:"ยังไม่เปิดใช้การกู้คืนรหัสผ่าน",community:"แบ่งปันช่วงเวลา",chat:"เชื่อมต่อกันเสมอ",language:"เลือกภาษา",lightMode:"โหมดสว่าง",darkMode:"โหมดมืด"}
 };
-function Login({onLogin,language,onLanguageChange}){
+function Login({onLogin,language="en",onLanguageChange=()=>{},theme="dark",onThemeChange=()=>{}}){
   const[mode,setMode]=useState("login"),[f,setF]=useState({email:"",username:"",name:"",password:""}),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
   const copy=AUTH_COPY[language]||AUTH_COPY.en;
   function changeMode(next){setMode(next);setErr("")}
@@ -85,7 +85,9 @@ function Login({onLogin,language,onLanguageChange}){
       <section className="social-auth-panel">
         <div className="auth-card social-auth-card">
           <div className="auth-mobile-brand">Social<span>N</span></div>
-          <h2>{mode==="login"?copy.loginTitle:copy.registerTitle}</h2>
+          <div className="social-auth-card-head">
+            <h2>{mode==="login"?copy.loginTitle:copy.registerTitle}</h2>
+          </div>
           <form onSubmit={sub}>
             {mode==="register"&&<><input required autoComplete="name" placeholder={copy.name} value={f.name} onChange={e=>setF({...f,name:e.target.value})}/><input required autoComplete="username" placeholder={copy.username} value={f.username} onChange={e=>setF({...f,username:e.target.value})}/></>}
             <input required type="email" autoComplete="email" placeholder={copy.email} value={f.email} onChange={e=>setF({...f,email:e.target.value})}/>
@@ -101,6 +103,10 @@ function Login({onLogin,language,onLanguageChange}){
     </main>
     <footer className="social-auth-languages" aria-label={copy.language}>
       {LANGUAGES.map(item=><button type="button" className={language===item.code?"active":""} key={item.code} onClick={()=>onLanguageChange(item.code)}>{item.label}</button>)}
+      <span className="auth-footer-separator" aria-hidden="true"/>
+      <button type="button" className="auth-theme-toggle" onClick={()=>onThemeChange(theme==="dark"?"light":"dark")} aria-label={theme==="dark"?copy.lightMode:copy.darkMode} title={theme==="dark"?copy.lightMode:copy.darkMode}>
+        {theme==="dark"?<Sun size={18}/>:<Moon size={18}/>}<span>{theme==="dark"?copy.lightMode:copy.darkMode}</span>
+      </button>
     </footer>
   </div>
 }
@@ -1425,7 +1431,7 @@ function RoutedApp(){
   function logout(){localStorage.removeItem("socialn_token");window.history.replaceState({},"","/");setUser(null)}
   function toggleSidebar(){if(window.matchMedia("(max-width: 900px)").matches)setMobileSidebarOpen(value=>!value);else setSidebarCollapsed(value=>!value)}
 
-  if(!user)return <Login language={language} onLanguageChange={setLanguage} onLogin={u=>{setUser(u);window.history.replaceState({},"","/")}}/>;
+  if(!user)return <Login language={language} onLanguageChange={setLanguage} theme={theme} onThemeChange={setTheme} onLogin={u=>{setUser(u);window.history.replaceState({},"","/")}}/>;
   return <div><ConfirmHost/><MetroMessageToasts items={[...messageToasts,...activityToasts].slice(0,4)} onOpen={item=>item.kind==="activity"?openActivityNotification(item):openMessageNotification(item)} onDismiss={id=>{setMessageToasts(rows=>rows.filter(row=>row.toastId!==id));setActivityToasts(rows=>rows.filter(row=>row.toastId!==id))}}/>
     <header className="topbar"><button className="sidebar-toggle" onClick={toggleSidebar} aria-label={mobileSidebarOpen||!sidebarCollapsed?"Close navigation menu":"Open navigation menu"} aria-expanded={mobileSidebarOpen||!sidebarCollapsed}><Menu size={23}/></button><div className="brand" onClick={()=>go("/","home")}>Social<span>N</span></div><div className="search"><Search/><input value={search} onChange={e=>query(e.target.value)} placeholder="Search SocialN..."/>{results.length>0&&<div className="search-results">{results.map(u=><button key={u.id} onClick={()=>{openProfile(u.id);setResults([]);setSearch("")}}><Avatar user={u}/><span>{u.name}<small>@{u.username}</small></span></button>)}</div>}</div>
       <div className="top-actions">
