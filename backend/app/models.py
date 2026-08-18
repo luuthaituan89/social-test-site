@@ -10,6 +10,10 @@ import enum
 class Privacy(str, enum.Enum):
     public = "public"
     friends = "friends"
+    friends_except = "friends_except"
+    specific_friends = "specific_friends"
+    followers = "followers"
+    custom = "custom"
     only_me = "only_me"
 
 
@@ -39,10 +43,59 @@ class User(Base):
     username_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     active_status_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    privacy_settings: Mapped[str | None] = mapped_column(Text, nullable=True)
+    account_status: Mapped[str] = mapped_column(String(30), default="active", index=True)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deletion_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deletion_scheduled_for: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    auth_version: Mapped[int] = mapped_column(default=1)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    totp_secret_encrypted: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    recovery_codes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
     comments = relationship("Comment", back_populates="author", cascade="all, delete-orphan")
+
+    @property
+    def email_verified(self) -> bool:
+        return self.email_verified_at is not None
+
+    @property
+    def two_factor_enabled(self) -> bool:
+        return bool(self.totp_enabled)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    previous_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    device_id: Mapped[str] = mapped_column(String(64), index=True)
+    device_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    revoke_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
+class AccountToken(Base):
+    __tablename__ = "account_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    purpose: Mapped[str] = mapped_column(String(30), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Friendship(Base):
@@ -57,6 +110,16 @@ class Friendship(Base):
     status: Mapped[FriendshipStatus] = mapped_column(
         Enum(FriendshipStatus), default=FriendshipStatus.pending
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Follow(Base):
+    __tablename__ = "follows"
+    __table_args__ = (UniqueConstraint("follower_id", "followed_id", name="uq_follow_pair"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    follower_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    followed_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -83,6 +146,7 @@ class Post(Base):
     media_type: Mapped[str] = mapped_column(String(20), default="image")
     album_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
     privacy: Mapped[Privacy] = mapped_column(Enum(Privacy), default=Privacy.public)
+    audience_config: Mapped[str | None] = mapped_column(Text, nullable=True)
     shared_post_id: Mapped[int | None] = mapped_column(ForeignKey("posts.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
@@ -281,6 +345,7 @@ class Album(Base):
     name: Mapped[str] = mapped_column(String(150))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     privacy: Mapped[Privacy] = mapped_column(Enum(Privacy), default=Privacy.friends)
+    audience_config: Mapped[str | None] = mapped_column(Text, nullable=True)
     kind: Mapped[str | None] = mapped_column(String(30), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

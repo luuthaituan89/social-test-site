@@ -585,6 +585,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 }
 .messages .chat-gif-button{background:transparent!important;border:0!important;box-shadow:none!important}
 
+/* Shared posts: independent wrapper activity with a live, privacy-aware source preview. */
+.shared-author{display:flex;align-items:center;gap:9px;background:transparent;color:inherit;padding:0;text-align:left}.shared-author>span{display:flex;flex-direction:column}.shared-author small{font-size:11px;color:#94a3b8;font-weight:400}.shared-unavailable{display:flex;align-items:center;gap:12px;color:#cbd5e1;min-height:84px}.shared-unavailable>div{display:flex;flex-direction:column;gap:4px}.shared-unavailable small{color:#94a3b8;line-height:1.4}.shared-card.compact{margin:0;min-width:min(330px,65vw);max-width:min(520px,72vw);padding:11px}.shared-card.compact .shared-image{max-height:280px;object-fit:contain}.shared-card.compact .shared-content{padding:9px 0}.shared-loading{color:#94a3b8}.attachment-bubble:has(.shared-card){padding:5px;background:transparent}.share-success{display:flex;align-items:center;gap:7px;margin:9px 0;padding:9px 11px;background:#064e3b;color:#a7f3d0}.share-dialog-backdrop{z-index:12000}.share-dialog{width:min(590px,96vw);max-height:92vh;overflow:auto;background:#111827;border:1px solid #334155;box-shadow:0 28px 90px #000b;padding:20px;display:grid;gap:14px}.share-dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.share-dialog h3{margin:0 0 4px;font-size:23px}.share-dialog header small{color:#94a3b8}.share-dialog>nav{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;border-bottom:1px solid #263244}.share-dialog>nav button{background:transparent;color:#94a3b8;padding:11px 8px;border-bottom:3px solid transparent}.share-dialog>nav button.active{color:#38bdf8;border-color:#0284c7}.share-dialog>textarea{width:100%;min-height:80px;resize:vertical}.share-dialog>.shared-card{margin:0;max-height:300px;overflow:auto}.share-dialog>.shared-card .shared-image{max-height:170px;object-fit:contain}.share-privacy{display:flex;justify-content:space-between;align-items:center;gap:10px}.share-privacy select{padding:8px 11px}.share-targets{display:grid;gap:6px;max-height:250px;overflow:auto}.share-targets>button{display:flex;align-items:center;gap:10px;width:100%;padding:10px;background:#172033;color:#e5e7eb;text-align:left}.share-targets>button>span{min-width:0;flex:1;display:flex;flex-direction:column}.share-targets small{color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.share-targets>button>svg:last-child{opacity:0;color:#4ade80}.share-targets>button.selected{background:#0c4a6e}.share-targets>button.selected>svg:last-child{opacity:1}.share-dialog>footer{display:flex;justify-content:flex-end;gap:9px;padding-top:4px}:root[data-theme="light"] .share-dialog{background:#fff;color:#172033;border-color:#cbd5e1}:root[data-theme="light"] .share-dialog>nav{border-color:#d9e1ec}:root[data-theme="light"] .share-targets>button{background:#eef2f7;color:#172033}:root[data-theme="light"] .share-targets>button.selected{background:#dbeafe}:root[data-theme="light"] .shared-unavailable{color:#334155}:root[data-theme="light"] .share-success{background:#d1fae5;color:#065f46}@media(max-width:560px){.share-dialog-backdrop{padding:0}.share-dialog{width:100vw;height:100vh;max-height:none;padding:14px}.share-dialog>nav button{font-size:13px}.share-dialog>footer{margin-top:auto}.shared-card.compact{min-width:min(270px,72vw);max-width:76vw}}
+
 /* A selected post reaction uses text emphasis instead of a blue Metro tile. */
 .post-buttons .reaction-wrap>button.active,
 .post-buttons .reaction-wrap>button.active:hover{
@@ -618,3 +621,45 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   .reaction-list-backdrop{padding:0;align-items:end}.reaction-list-dialog{width:100%;max-height:78vh}
   .reaction-person em{display:none}
 }
+
+/* Keep the desktop messenger inside the viewport.  Only the message pane should
+   scroll; scrolling the document exposed .main's old 80px bottom padding as a
+   black strip and could move the conversation header behind the sticky topbar. */
+@media(min-width:901px){
+  .main.chat-main,
+  .sidebar-collapsed .main.chat-main{
+    height:calc(100vh - 70px);
+    height:calc(100dvh - 70px);
+    min-height:0;
+    margin-top:0;
+    margin-bottom:0;
+    padding-top:0;
+    padding-bottom:0;
+    overflow:hidden;
+  }
+  .chat-main .chat-layout,
+  .sidebar-collapsed .chat-main .chat-layout{
+    height:100%;
+    min-height:0;
+  }
+  .chat-main .conversation-list,
+  .chat-main .chat{
+    height:100%;
+    min-height:0;
+  }
+}
+/* Advanced audience and privacy checkup */
+.audience-selector{position:relative;display:inline-flex;flex-direction:column;min-width:180px}.audience-selector>select{width:100%}.audience-popover{position:absolute;z-index:80;right:0;bottom:calc(100% + 8px);width:min(360px,80vw);max-height:360px;overflow:auto;padding:14px;background:var(--panel,#181818);border:1px solid var(--border,#333);box-shadow:0 12px 36px #0008}.audience-popover>b{display:block;margin-bottom:10px}.audience-popover>label{display:grid;gap:6px;margin-bottom:10px}.audience-people{display:grid;gap:6px}.audience-people>label{display:flex;align-items:center;gap:9px;padding:7px;background:var(--panel-2,#202020)}.audience-people>label>span{flex:1;overflow:hidden;text-overflow:ellipsis}.audience-people select{width:auto;max-width:130px}.post-edit .audience-selector,.album-create-modal .audience-selector,.share-privacy .audience-selector{width:100%}.post-edit .audience-popover,.album-create-modal .audience-popover,.share-dialog .audience-popover{position:relative;right:auto;bottom:auto;width:100%;margin-top:8px;box-shadow:none}.advanced-privacy-settings .profile-privacy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.profile-privacy-grid>label{display:grid;gap:7px;padding:12px;background:var(--panel-2,#202020)}.profile-privacy-grid .audience-selector{width:100%}.profile-privacy-grid .audience-popover{position:relative;right:auto;bottom:auto;width:100%;margin-top:8px}.privacy-checkup-summary{margin-top:16px;padding:14px;background:var(--panel-2,#202020)}.privacy-checkup-summary h4{margin:0 0 8px}.privacy-checkup-summary p{margin:5px 0}.privacy-counts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.privacy-counts span{padding:6px 9px;background:var(--panel,#181818)}.privacy-settings-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+
+/* User data lifecycle */
+.data-lifecycle-settings{display:grid;gap:16px}.data-lifecycle-settings>h3,.data-lifecycle-settings>p{margin:0}.data-tool-card{display:grid;gap:13px;padding:16px;background:var(--panel-soft);border-left:4px solid var(--accent)}.data-tool-card h4{display:flex;align-items:center;gap:8px;margin:0 0 5px}.data-tool-card p{margin:0}.data-export-controls{display:grid;grid-template-columns:minmax(150px,1fr) repeat(2,minmax(145px,1fr));gap:10px}.export-categories{display:flex;gap:8px;flex-wrap:wrap}.export-categories label{display:flex;align-items:center;gap:7px;padding:8px 11px;background:var(--panel);cursor:pointer}.export-categories input{width:auto;margin:0}.data-tool-card>button{justify-self:start;display:flex;align-items:center;gap:7px}.data-retention-note{padding:14px 16px;background:color-mix(in srgb,var(--accent) 10%,var(--panel));border-left:4px solid var(--accent)}.data-retention-note p{margin:7px 0}.account-danger-zone{display:grid;gap:12px;padding:16px;background:color-mix(in srgb,#b91c1c 10%,var(--panel));border-left:4px solid #dc2626}.account-danger-zone h4{margin:0}.account-danger-zone>div{display:flex;gap:10px;flex-wrap:wrap}.account-danger-zone .danger{background:#991b1b;color:#fff}.account-danger-zone label{max-width:440px}@media(max-width:700px){.data-export-controls{grid-template-columns:1fr}}
+.account-security-settings{display:grid;gap:16px}
+.security-status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.security-status-card,.two-factor-setup,.recovery-codes,.device-sessions{border:1px solid var(--border);padding:16px;background:var(--surface-2)}
+.security-status-card{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.security-status-card span{display:grid;gap:4px}.security-status-card small,.session-row small{display:block;color:var(--muted)}
+.two-factor-setup,.recovery-codes{display:grid;gap:10px}.two-factor-setup code{overflow-wrap:anywhere;padding:10px;background:var(--bg)}
+.recovery-codes>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.recovery-codes code{padding:8px;background:var(--bg);text-align:center}
+.device-sessions{display:grid;gap:0}.session-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
+.session-row>div{min-width:0}.session-row b{overflow-wrap:anywhere}.session-row .count-chip{margin-left:6px;font-size:11px}
+@media(max-width:700px){.security-status-grid{grid-template-columns:1fr}.security-status-card,.session-row{align-items:flex-start;flex-direction:column}.recovery-codes>div{grid-template-columns:1fr}}

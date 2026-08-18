@@ -11,46 +11,20 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from ..database import get_db, SessionLocal
-from ..models import User, Conversation, Message, MessageReaction, Block, ChatGroup, ChatGroupMember, ChatGroupJoinRequest, ChatPoll, ChatPollOption, ChatPollVote
+from ..models import AuthSession, User, Conversation, Message, MessageReaction, Block, ChatGroup, ChatGroupMember, ChatGroupJoinRequest, ChatPoll, ChatPollOption, ChatPollVote
 from ..auth import get_current_user
 from ..config import settings
 from ..schemas import MessageCreate, ReactionIn, ChatGroupCreate, ChatGroupUpdate, ChatPollCreate, DirectChatUpdate
 from ..notifications import create_notification
 from ..utils import are_friends, has_restricted
 from .notifications import notification_ws
+from ..services.realtime import DistributedSocketManager, user_is_online
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 REACTIONS = {"like": "👍", "love": "❤️", "haha": "😂", "wow": "😮", "sad": "😢", "angry": "😡"}
 
 
-class ConnectionManager:
-    def __init__(self):
-        self.active: dict[int, set[WebSocket]] = {}
-
-    async def connect(self, user_id: int, ws: WebSocket):
-        await ws.accept()
-        self.active.setdefault(user_id, set()).add(ws)
-
-    def disconnect(self, user_id: int, ws: WebSocket):
-        sockets = self.active.get(user_id)
-        if not sockets:
-            return
-        sockets.discard(ws)
-        if not sockets:
-            self.active.pop(user_id, None)
-
-    async def send_user(self, user_id: int, payload: dict):
-        dead = []
-        for ws in list(self.active.get(user_id, set())):
-            try:
-                await ws.send_json(payload)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(user_id, ws)
-
-
-manager = ConnectionManager()
+manager = DistributedSocketManager("chat")
 
 
 def blocked_between(db: Session, a: int, b: int) -> bool:
@@ -580,7 +554,7 @@ def conversations(
                 "username": other.username,
                 "avatar_url": other.avatar_url,
             },
-            "last_message": last.content if last else "",
+            "last_message": (last.content or ("Shared post" if last.message_type == "post" else "")) if last else "",
             "last_message_type": last.message_type if last else None,
             "last_at": last.created_at if last else conv.created_at,
             "pinned": state["pinned"],
@@ -604,7 +578,7 @@ def conversations(
             "invite_enabled": group.invite_enabled, "invite_token": group.invite_token,
             "member_customization": group.member_customization,
             "muted_until": membership.muted_until, "notification_sound": membership.notification_sound,
-            "last_message": last.content if last else "", "last_message_type": last.message_type if last else None,
+            "last_message": (last.content or ("Shared post" if last.message_type == "post" else "")) if last else "", "last_message_type": last.message_type if last else None,
             "last_at": last.created_at if last else group.created_at, "pinned": False, "archived": False,
             "unread_count": unread_query.count(),
         })
@@ -642,9 +616,9 @@ def unread_message_count(db: Session = Depends(get_db), user: User = Depends(get
 
 
 @router.get("/presence/{other_user_id}")
-def user_presence(other_user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+async def user_presence(other_user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     other = db.get(User, other_user_id)
-    if not other:
+    if not other or other.account_status != "active":
         raise HTTPException(404, "User not found")
     # If the viewed person restricted the requester, do not reveal their
     # current or last activity. The restrictor can still see the other side.
@@ -654,9 +628,8 @@ def user_presence(other_user_id: int, db: Session = Depends(get_db), user: User 
     previously_messaged = bool(direct and db.query(Message.id).filter(Message.conversation_id == direct.id).first())
     allowed_audience = other_user_id == user.id or are_friends(db, user.id, other_user_id) or previously_messaged
     mutually_visible = bool(allowed_audience and user.active_status_enabled and other.active_status_enabled and not hidden_by_other)
-    online = mutually_visible and (other_user_id == user.id or bool(
-        notification_ws.active.get(other_user_id) or manager.active.get(other_user_id)
-    ))
+    local_online = bool(notification_ws.active.get(other_user_id) or manager.active.get(other_user_id))
+    online = mutually_visible and (other_user_id == user.id or local_online or await user_is_online(other_user_id))
     return {
         "online": online,
         "last_seen_at": other.last_seen_at if mutually_visible else None,
@@ -1001,7 +974,7 @@ async def unsend_message(message_id: int, db: Session = Depends(get_db), user: U
 async def forward_message(message_id: int, recipient_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     source, _ = owned_chat_message(db, message_id, user.id)
     recipient = db.get(User, recipient_id)
-    if not recipient:
+    if not recipient or recipient.account_status != "active":
         raise HTTPException(404, "Recipient not found")
     if source.is_unsent:
         raise HTTPException(400, "An unsent message cannot be forwarded")
@@ -1039,17 +1012,12 @@ async def websocket_chat(ws: WebSocket):
         await ws.close(code=1008)
         return
 
-    try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
-        user_id = int(payload["sub"])
-    except (JWTError, KeyError, TypeError, ValueError):
-        await ws.close(code=1008)
-        return
-
     db = SessionLocal()
-    user = db.get(User, user_id)
-
-    if not user:
+    try:
+        from ..auth import authenticated_user_from_token
+        user, auth_session = authenticated_user_from_token(db, token)
+        user_id = user.id
+    except Exception:
         db.close()
         await ws.close(code=1008)
         return
@@ -1061,6 +1029,12 @@ async def websocket_chat(ws: WebSocket):
             # WebSocket is receive-only for app messages.
             # Client sends text "ping" as keepalive.
             data = await ws.receive_text()
+            db.expire_all()
+            live_session = db.query(AuthSession).filter(AuthSession.id == auth_session.id).first()
+            if not live_session or live_session.revoked_at is not None:
+                await ws.close(code=1008)
+                break
+            await manager.touch(user_id)
             if data == "ping":
                 await ws.send_text("pong")
                 continue

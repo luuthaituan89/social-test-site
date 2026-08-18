@@ -260,13 +260,20 @@ def list_posts(group_id: int, db: Session = Depends(get_db), user: User = Depend
     rows=[row for row in rows if row.id not in hidden_ids]
     result=[]
     for row in rows:
+        from .posts import shared_source_payload
         author=db.get(User,row.author_id)
         reactions=db.query(GroupPostReaction).filter(GroupPostReaction.post_id==row.id).all();counts={};mine=None
         for reaction in reactions:
             counts[reaction.reaction]=counts.get(reaction.reaction,0)+1
             if reaction.user_id==user.id: mine=reaction.reaction
         comments=db.query(GroupPostComment).filter(GroupPostComment.post_id==row.id).order_by(GroupPostComment.created_at.asc()).all()
-        result.append({"id":row.id,"content":row.content,"media_url":row.media_url,"media_type":row.media_type,"is_anonymous":row.is_anonymous,"is_pinned":row.is_pinned,"created_at":row.created_at,"author":None if row.is_anonymous else user_payload(author),"can_delete":row.author_id==user.id or (member and member.role in {"admin","moderator"}),"can_moderate":bool(member and member.role in {"admin","moderator"}),"my_reaction":mine,"reaction_counts":counts,"reactions_count":len(reactions),"comments":[{"id":comment.id,"content":comment.content,"created_at":comment.created_at,"author":user_payload(db.get(User,comment.author_id))} for comment in comments],"can_share":group.privacy=="public"})
+        shared_post = None
+        if row.media_type == "shared_post" and row.media_url:
+            try:
+                shared_post = shared_source_payload(int(row.media_url), db, user)
+            except (TypeError, ValueError):
+                shared_post = {"available": False}
+        result.append({"id":row.id,"content":row.content,"media_url":None if row.media_type=="shared_post" else row.media_url,"media_type":row.media_type,"shared_post":shared_post,"is_anonymous":row.is_anonymous,"is_pinned":row.is_pinned,"created_at":row.created_at,"author":None if row.is_anonymous else user_payload(author),"can_delete":row.author_id==user.id or (member and member.role in {"admin","moderator"}),"can_moderate":bool(member and member.role in {"admin","moderator"}),"my_reaction":mine,"reaction_counts":counts,"reactions_count":len(reactions),"comments":[{"id":comment.id,"content":comment.content,"created_at":comment.created_at,"author":user_payload(db.get(User,comment.author_id))} for comment in comments],"can_share":group.privacy=="public"})
     return result
 
 

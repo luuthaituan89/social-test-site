@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from pathlib import Path
 import uuid
 import shutil
@@ -8,14 +8,18 @@ import re
 from datetime import datetime, timedelta
 
 from ..database import get_db
-from ..models import User, Block, Friendship, FriendshipStatus, Post, Privacy, RelationshipRequest, Notification
-from ..schemas import UserPublic, ProfileUpdate, PasswordChange, UsernameChange, ActiveStatusUpdate
+from ..models import User, Block, Friendship, FriendshipStatus, Follow, Post, Privacy, RelationshipRequest, Notification
+from ..schemas import (UserPublic, ProfileUpdate, PasswordChange, UsernameChange,
+                       ActiveStatusUpdate, PrivacySettingsUpdate)
 from ..auth import get_current_user, verify_password, hash_password
 from ..config import settings
 from ..utils import are_friends, is_blocked_either_way, friend_ids
 from ..activity import log_activity
 from ..notifications import create_notification
 from .notifications import notification_ws
+from ..services.privacy import (can_view_profile_field, encode_privacy_settings,
+                                privacy_settings)
+from ..services.account_security import revoke_user_sessions
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -35,6 +39,63 @@ def update_active_status(data: ActiveStatusUpdate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.get("/me/privacy-settings")
+def get_privacy_settings(user: User = Depends(get_current_user)):
+    return privacy_settings(user)
+
+
+@router.put("/me/privacy-settings")
+def update_privacy_settings(data: PrivacySettingsUpdate, db: Session = Depends(get_db),
+                            user: User = Depends(get_current_user)):
+    payload = data.model_dump()
+    selected = set()
+    for item in payload.values():
+        selected.update(item.get("included_ids", [])); selected.update(item.get("excluded_ids", []))
+    if selected - friend_ids(db, user.id):
+        raise HTTPException(400, "Profile audiences can only contain your friends")
+    try:
+        user.privacy_settings = encode_privacy_settings(payload)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    db.commit();db.refresh(user)
+    log_activity(db, user.id, "privacy", "privacy_settings_updated", "Updated profile privacy settings")
+    db.commit()
+    return privacy_settings(user)
+
+
+@router.post("/me/privacy/limit-old-posts")
+def limit_old_posts(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(Post).filter(Post.author_id == user.id, Post.privacy != Privacy.only_me).all()
+    changed = 0
+    for post in rows:
+        if post.privacy != Privacy.friends or post.audience_config:
+            post.privacy = Privacy.friends
+            post.audience_config = None
+            changed += 1
+    log_activity(db, user.id, "privacy", "old_posts_limited", f"Limited {changed} old posts to friends")
+    db.commit()
+    return {"message": "Past posts are now limited to friends", "updated_count": changed}
+
+
+@router.get("/me/privacy/checkup")
+def privacy_checkup(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    settings_value = privacy_settings(user)
+    counts = {item.value: 0 for item in Privacy}
+    for value, count in db.query(Post.privacy, func.count(Post.id)).filter(
+        Post.author_id == user.id, Post.media_type != "unavailable"
+    ).group_by(Post.privacy).all():
+        counts[value.value] = count
+    public_fields = [field for field, value in settings_value.items() if value["audience"] == "public"]
+    recommendations = []
+    if counts["public"]:
+        recommendations.append(f'{counts["public"]} posts are visible publicly')
+    if public_fields:
+        recommendations.append("Public profile fields: " + ", ".join(public_fields))
+    if not recommendations:
+        recommendations.append("No obvious public exposure was found")
+    return {"profile": settings_value, "post_counts": counts, "recommendations": recommendations}
 
 
 @router.put("/me", response_model=UserPublic)
@@ -229,17 +290,18 @@ def people_you_may_know(limit: int = 12, db: Session = Depends(get_db), user: Us
     pending_rows=db.query(Friendship).filter(or_(Friendship.requester_id==user.id,Friendship.addressee_id==user.id),Friendship.status==FriendshipStatus.pending).all()
     pending={r.addressee_id if r.requester_id==user.id else r.requester_id for r in pending_rows}
     excluded=mine|blocked|pending|{user.id}
-    q=db.query(User)
+    q=db.query(User).filter(User.account_status == "active")
     if excluded: q=q.filter(~User.id.in_(excluded))
     scored=[]
     for c in q.limit(100).all(): scored.append((len(mine & friend_ids(db,c.id)),c))
     scored.sort(key=lambda x:(-x[0],x[1].name.lower()))
-    return [{"id":c.id,"name":c.name,"username":c.username,"avatar_url":c.avatar_url,"hometown":c.hometown,"mutual_friends_count":m} for m,c in scored[:limit]]
+    return [{"id":c.id,"name":c.name,"username":c.username,"avatar_url":c.avatar_url,"mutual_friends_count":m} for m,c in scored[:limit]]
 
 @router.get("/{user_id}/profile")
 def public_profile(user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     target=db.get(User,user_id)
     if not target: raise HTTPException(404,"User not found")
+    if target.account_status != "active": raise HTTPException(404,"Profile unavailable")
     if user.id!=target.id and is_blocked_either_way(db,user.id,target.id): raise HTTPException(403,"Profile unavailable")
     mine=friend_ids(db,user.id); theirs=friend_ids(db,target.id); mids=list(mine & theirs)
     mutual=db.query(User).filter(User.id.in_(mids)).limit(12).all() if mids else []
@@ -247,10 +309,13 @@ def public_profile(user_id: int, db: Session = Depends(get_db), user: User = Dep
     incoming=db.query(Friendship).filter(Friendship.requester_id==target.id,Friendship.addressee_id==user.id,Friendship.status==FriendshipStatus.pending).first()
     rel='self' if target.id==user.id else ('friends' if are_friends(db,user.id,target.id) else 'outgoing_request' if outgoing else 'incoming_request' if incoming else 'none')
     partner=db.get(User,target.relationship_partner_id) if target.relationship_partner_id else None
+    show_dob=can_view_profile_field(db,target,user.id,"dob")
+    show_hometown=can_view_profile_field(db,target,user.id,"hometown")
+    show_relationship=can_view_profile_field(db,target,user.id,"relationship")
     pending_relationship=db.query(RelationshipRequest).filter(RelationshipRequest.requester_id==target.id,RelationshipRequest.status=="pending").order_by(RelationshipRequest.created_at.desc()).first() if user.id==target.id else None
     pending_partner=db.get(User,pending_relationship.addressee_id) if pending_relationship else None
     pending_payload={"id":pending_relationship.id,"relationship_status":pending_relationship.relationship_status,"relationship_since":pending_relationship.relationship_since,"partner":{"id":pending_partner.id,"name":pending_partner.name,"username":pending_partner.username,"avatar_url":pending_partner.avatar_url}} if pending_relationship and pending_partner else None
-    return {"user":{"id":target.id,"username":target.username,"name":target.name,"dob":target.dob,"hometown":target.hometown,"gender":target.gender,"relationship_status":target.relationship_status,"relationship_partner_id":target.relationship_partner_id,"relationship_since":target.relationship_since,"relationship_partner":{"id":partner.id,"name":partner.name,"username":partner.username,"avatar_url":partner.avatar_url} if partner else None,"bio":target.bio,"avatar_url":target.avatar_url,"cover_url":target.cover_url,"created_at":target.created_at},"pending_relationship":pending_payload,"relationship":rel,"incoming_request_id":incoming.id if incoming else None,"mutual_friends_count":len(mine & theirs),"mutual_friends":[{"id":x.id,"name":x.name,"username":x.username,"avatar_url":x.avatar_url} for x in mutual]}
+    return {"user":{"id":target.id,"username":target.username,"name":target.name,"dob":target.dob if show_dob else None,"hometown":target.hometown if show_hometown else None,"gender":target.gender,"relationship_status":target.relationship_status if show_relationship else None,"relationship_partner_id":target.relationship_partner_id if show_relationship else None,"relationship_since":target.relationship_since if show_relationship else None,"relationship_partner":{"id":partner.id,"name":partner.name,"username":partner.username,"avatar_url":partner.avatar_url} if partner and show_relationship else None,"bio":target.bio,"avatar_url":target.avatar_url,"cover_url":target.cover_url,"created_at":target.created_at},"pending_relationship":pending_payload,"relationship":rel,"incoming_request_id":incoming.id if incoming else None,"mutual_friends_count":len(mine & theirs),"mutual_friends":[{"id":x.id,"name":x.name,"username":x.username,"avatar_url":x.avatar_url} for x in mutual],"is_following":db.query(Follow.id).filter(Follow.follower_id==user.id,Follow.followed_id==target.id).first() is not None,"followers_count":db.query(Follow.id).filter(Follow.followed_id==target.id).count(),"privacy_visibility":{"dob":show_dob,"hometown":show_hometown,"relationship":show_relationship,"albums":can_view_profile_field(db,target,user.id,"albums"),"friends_list":can_view_profile_field(db,target,user.id,"friends_list")}}
 
 
 @router.get("/username/{username}/profile")
@@ -261,7 +326,39 @@ def profile_by_username(username: str, db: Session = Depends(get_db), user: User
     return public_profile(target.id, db, user)
 
 
-@router.get("/search", response_model=list[UserPublic])
+@router.post("/{user_id}/follow")
+def follow_user(user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if user_id == user.id:
+        raise HTTPException(400, "You cannot follow yourself")
+    target = db.get(User, user_id)
+    if not target or is_blocked_either_way(db, user.id, user_id):
+        raise HTTPException(404, "User not found")
+    existing = db.query(Follow).filter(Follow.follower_id == user.id, Follow.followed_id == user_id).first()
+    if not existing:
+        db.add(Follow(follower_id=user.id, followed_id=user_id));db.commit()
+    return {"following": True, "followers_count": db.query(Follow.id).filter(Follow.followed_id == user_id).count()}
+
+
+@router.delete("/{user_id}/follow")
+def unfollow_user(user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    db.query(Follow).filter(Follow.follower_id == user.id, Follow.followed_id == user_id).delete()
+    db.commit()
+    return {"following": False, "followers_count": db.query(Follow.id).filter(Follow.followed_id == user_id).count()}
+
+
+@router.get("/{user_id}/friends")
+def visible_friend_list(user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    target = db.get(User, user_id)
+    if not target or is_blocked_either_way(db, user.id, user_id):
+        raise HTTPException(404, "User not found")
+    if not can_view_profile_field(db, target, user.id, "friends_list"):
+        raise HTTPException(403, "This friend list is private")
+    ids = friend_ids(db, target.id)
+    rows = db.query(User).filter(User.id.in_(ids)).order_by(User.name.asc()).all() if ids else []
+    return [{"id":item.id,"name":item.name,"username":item.username,"avatar_url":item.avatar_url} for item in rows]
+
+
+@router.get("/search")
 def search(q: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     q = q.strip()
     if not q:
@@ -276,13 +373,17 @@ def search(q: str, db: Session = Depends(get_db), user: User = Depends(get_curre
     query = db.query(User).filter(
         or_(User.username.like(f"%{q}%"), User.name.like(f"%{q}%")),
         User.id != user.id,
+        User.account_status == "active",
     )
     if hidden:
         query = query.filter(~User.id.in_(hidden))
     results = query.limit(30).all()
     log_activity(db, user.id, "search", "user_search", f'Searched for “{q}”', details={"query": q, "result_count": len(results)})
     db.commit()
-    return results
+    # Search is a public directory operation. Sensitive profile fields are
+    # resolved only through /profile, which evaluates their own audiences.
+    return [{"id": item.id, "username": item.username, "name": item.name,
+             "avatar_url": item.avatar_url} for item in results]
 
 
 @router.get("/me/blocked")
@@ -310,6 +411,10 @@ def block_user(target_id: int, db: Session = Depends(get_db), user: User = Depen
                 (Friendship.requester_id == target_id) & (Friendship.addressee_id == user.id),
             )
         ).delete(synchronize_session=False)
+        db.query(Follow).filter(or_(
+            (Follow.follower_id == user.id) & (Follow.followed_id == target_id),
+            (Follow.follower_id == target_id) & (Follow.followed_id == user.id),
+        )).delete(synchronize_session=False)
         db.commit()
     return {"message": "User blocked"}
 
@@ -326,8 +431,11 @@ def change_password(data: PasswordChange, db: Session = Depends(get_db), user: U
     if not verify_password(data.current_password, user.password_hash):
         raise HTTPException(400, "Current password is incorrect")
     user.password_hash = hash_password(data.new_password)
+    user.auth_version += 1
+    revoke_user_sessions(db, user.id, "password_changed")
+    log_activity(db, user.id, "security", "password_changed", "Changed the account password")
     db.commit()
-    return {"message": "Password changed successfully"}
+    return {"message": "Password changed successfully. All devices have been logged out", "reauthenticate": True}
 
 
 USERNAME_COOLDOWN = timedelta(days=30)

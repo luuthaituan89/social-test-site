@@ -11,6 +11,13 @@ from .notifications import notification_ws
 router = APIRouter(prefix="/api/friends", tags=["Friends"])
 
 
+def directory_user(person: User | None):
+    if not person:
+        return None
+    return {"id": person.id, "username": person.username, "name": person.name,
+            "avatar_url": person.avatar_url}
+
+
 def pair_filter(a, b):
     return or_(
         and_(Friendship.requester_id == a, Friendship.addressee_id == b),
@@ -26,7 +33,8 @@ def friends(db: Session = Depends(get_db), user: User = Depends(get_current_user
         Friendship.status == FriendshipStatus.accepted,
     ).all()
     ids = [r.addressee_id if r.requester_id == user.id else r.requester_id for r in rows]
-    return db.query(User).filter(User.id.in_(ids)).all() if ids else []
+    rows = db.query(User).filter(User.id.in_(ids), User.account_status == "active").all() if ids else []
+    return [directory_user(person) for person in rows]
 
 
 @router.get("/requests")
@@ -36,7 +44,7 @@ def requests(db: Session = Depends(get_db), user: User = Depends(get_current_use
         Friendship.status == FriendshipStatus.pending,
     ).all()
     return [
-        {"id": r.id, "user": db.get(User, r.requester_id), "created_at": r.created_at}
+        {"id": r.id, "user": directory_user(db.get(User, r.requester_id)), "created_at": r.created_at}
         for r in rows
     ]
 
@@ -48,7 +56,7 @@ def sent_requests(db: Session = Depends(get_db), user: User = Depends(get_curren
         Friendship.status == FriendshipStatus.pending,
     ).order_by(Friendship.created_at.desc()).all()
     return [
-        {"id": row.id, "user": db.get(User, row.addressee_id), "created_at": row.created_at}
+        {"id": row.id, "user": directory_user(db.get(User, row.addressee_id)), "created_at": row.created_at}
         for row in rows
     ]
 

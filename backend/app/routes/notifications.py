@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from ..config import settings
 from ..database import get_db, SessionLocal
-from ..models import Notification, User
+from ..models import AuthSession, Notification, User
 from ..auth import get_current_user
+from ..services.realtime import DistributedSocketManager
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
@@ -48,31 +49,38 @@ def read_one(notification_id: int, db: Session = Depends(get_db), user: User = D
     return {"message": "Notification marked as read"}
 
 
-class NotificationSocketManager:
-    def __init__(self): self.active={}
-    async def connect(self,user_id,ws): await ws.accept(); self.active.setdefault(user_id,set()).add(ws)
-    def disconnect(self,user_id,ws):
-        sockets=self.active.get(user_id,set()); sockets.discard(ws)
-        if not sockets:
-            self.active.pop(user_id,None)
-            from datetime import datetime
-            db=SessionLocal()
-            try:
-                user=db.get(User,user_id)
-                if user: user.last_seen_at=datetime.utcnow(); db.commit()
-            finally: db.close()
-    async def send(self,user_id,payload):
-        for ws in list(self.active.get(user_id,set())):
-            try: await ws.send_json(payload)
-            except Exception: self.disconnect(user_id,ws)
-notification_ws=NotificationSocketManager()
+def record_last_seen(user_id: int):
+    from datetime import datetime
+    db=SessionLocal()
+    try:
+        user=db.get(User,user_id)
+        if user: user.last_seen_at=datetime.utcnow(); db.commit()
+    finally: db.close()
+
+
+notification_ws=DistributedSocketManager("notifications", on_user_offline=record_last_seen)
 
 @router.websocket("/ws")
 async def notifications_ws(ws: WebSocket):
     token=ws.query_params.get("token")
-    try: user_id=int(jwt.decode(token,settings.jwt_secret,algorithms=["HS256"])["sub"])
+    db=SessionLocal()
+    try:
+        from ..auth import authenticated_user_from_token
+        authenticated=authenticated_user_from_token(db,token)
+        user_id=authenticated[0].id
+        session_id=authenticated[1].id
     except Exception: await ws.close(code=1008); return
+    finally: db.close()
     await notification_ws.connect(user_id,ws)
     try:
-        while True: await ws.receive_text()
-    except WebSocketDisconnect: notification_ws.disconnect(user_id,ws)
+        while True:
+            await ws.receive_text()
+            check=SessionLocal()
+            try: revoked=check.query(AuthSession).filter(AuthSession.id==session_id,AuthSession.revoked_at.is_(None)).first() is None
+            finally: check.close()
+            if revoked:
+                await ws.close(code=1008)
+                break
+            await notification_ws.touch(user_id)
+    except WebSocketDisconnect: pass
+    finally: notification_ws.disconnect(user_id,ws)

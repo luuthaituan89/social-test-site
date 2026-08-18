@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..auth import get_current_user
 from ..config import settings
 from ..models import User
+from ..services.cache import get_json, set_json
 
 router = APIRouter(prefix="/api/giphy", tags=["GIPHY"])
 
@@ -22,6 +23,10 @@ def find_gifs(
         raise HTTPException(503, "GIPHY is not configured. Add GIPHY_API_KEY to .env.")
 
     query = q.strip()
+    cache_key = f"giphy:{query.casefold() or 'trending'}"
+    cached = get_json(cache_key)
+    if cached is not None:
+        return {"data": cached, "cached": True}
     endpoint = "search" if query else "trending"
     params = {
         "api_key": settings.giphy_api_key,
@@ -59,4 +64,5 @@ def find_gifs(
             "width": int(original.get("width") or 0),
             "height": int(original.get("height") or 0),
         })
-    return {"data": results}
+    set_json(cache_key, results, ttl=300)
+    return {"data": results, "cached": False}

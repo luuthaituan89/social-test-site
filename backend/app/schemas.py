@@ -1,6 +1,27 @@
 from datetime import datetime, date
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-from typing import Optional
+from typing import Optional, Literal
+
+
+AudienceName = Literal["public", "friends", "friends_except", "specific_friends", "followers", "custom", "only_me"]
+
+
+class AudienceConfig(BaseModel):
+    included_ids: list[int] = Field(default_factory=list, max_length=500)
+    excluded_ids: list[int] = Field(default_factory=list, max_length=500)
+    base: Literal["public", "friends", "followers"] = "friends"
+
+
+class ProfileFieldPrivacy(AudienceConfig):
+    audience: AudienceName = "friends"
+
+
+class PrivacySettingsUpdate(BaseModel):
+    dob: ProfileFieldPrivacy
+    hometown: ProfileFieldPrivacy
+    relationship: ProfileFieldPrivacy
+    albums: ProfileFieldPrivacy
+    friends_list: ProfileFieldPrivacy
 
 
 class UserPublic(BaseModel):
@@ -18,6 +39,9 @@ class UserPublic(BaseModel):
     avatar_url: Optional[str] = None
     cover_url: Optional[str] = None
     active_status_enabled: bool = True
+    account_status: str = "active"
+    email_verified: bool = False
+    two_factor_enabled: bool = False
 
 
 class RegisterIn(BaseModel):
@@ -36,6 +60,44 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserPublic
+    expires_in: int = 900
+    verification_required: bool = False
+
+
+class LoginResult(BaseModel):
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    user: Optional[UserPublic] = None
+    expires_in: int = 900
+    requires_2fa: bool = False
+    challenge_token: Optional[str] = None
+    verification_required: bool = False
+
+
+class TwoFactorLoginIn(BaseModel):
+    challenge_token: str
+    code: str = Field(min_length=6, max_length=20)
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(min_length=32, max_length=300)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class TokenConfirm(BaseModel):
+    token: str = Field(min_length=32, max_length=300)
+
+
+class PasswordConfirm(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class TwoFactorConfirm(BaseModel):
+    code: str = Field(min_length=6, max_length=20)
 
 
 class ProfileUpdate(BaseModel):
@@ -60,6 +122,16 @@ class PostCreate(BaseModel):
     image_url: Optional[str] = None
     media_type: Optional[str] = None
     sticker: Optional[str] = Field(default=None, max_length=4000)
+    audience: AudienceConfig = Field(default_factory=AudienceConfig)
+
+
+class PostShareIn(BaseModel):
+    destination: str = "feed"
+    caption: str = Field(default="", max_length=5000)
+    privacy: str = "public"
+    target_id: Optional[int] = None
+    target_type: Optional[str] = None
+    audience: AudienceConfig = Field(default_factory=AudienceConfig)
 
 
 class CommentCreate(BaseModel):
@@ -126,6 +198,23 @@ class ActiveStatusUpdate(BaseModel):
     enabled: bool
 
 
+class AccountPasswordConfirm(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class DataExportRequest(BaseModel):
+    format: Literal["json", "html"] = "json"
+    categories: list[Literal["profile", "posts", "comments", "reactions", "messages", "friends", "groups", "activity", "media"]] = Field(default_factory=lambda: ["profile", "posts", "comments", "reactions", "messages", "friends", "groups", "activity", "media"], min_length=1, max_length=9)
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+
+
+class ActivityDeleteRequest(BaseModel):
+    category: Literal["search", "login", "posts", "profile", "friends", "security", "all"]
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+
+
 class ReactionIn(BaseModel):
     reaction: str = "like"
 
@@ -134,6 +223,7 @@ class AlbumCreate(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     description: Optional[str] = Field(default=None, max_length=2000)
     privacy: str = "friends"
+    audience: AudienceConfig = Field(default_factory=AudienceConfig)
 
 
 class GroupCreate(BaseModel):

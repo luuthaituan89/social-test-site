@@ -9,7 +9,9 @@ from ..config import settings
 from ..database import get_db
 from ..models import Album, AlbumMedia, Post, Privacy, User
 from ..schemas import AlbumCreate
-from ..utils import are_friends, is_blocked_either_way
+from ..utils import is_blocked_either_way, friend_ids, has_restricted
+from ..services.privacy import (can_view_audience, can_view_profile_field,
+                                decode_config, encode_audience_config)
 
 router = APIRouter(prefix="/api/albums", tags=["Albums"])
 
@@ -20,14 +22,31 @@ SYSTEM_ALBUMS = {
 }
 
 
+def album_audience(db: Session, user: User, data: AlbumCreate) -> str | None:
+    if data.privacy not in {item.value for item in Privacy}:
+        raise HTTPException(400, "Invalid privacy")
+    config = data.audience.model_dump()
+    selected = set(config["included_ids"]) | set(config["excluded_ids"])
+    if selected - friend_ids(db, user.id):
+        raise HTTPException(400, "Album audiences can only contain your friends")
+    if data.privacy == "specific_friends" and not config["included_ids"]:
+        raise HTTPException(400, "Choose at least one specific friend")
+    return encode_audience_config(config)
+
+
 def can_view_album(album: Album, db: Session, viewer: User) -> bool:
     if album.owner_id == viewer.id:
         return True
     if is_blocked_either_way(db, album.owner_id, viewer.id):
         return False
-    if album.privacy == Privacy.public:
-        return True
-    return album.privacy == Privacy.friends and are_friends(db, album.owner_id, viewer.id)
+    owner = db.get(User, album.owner_id)
+    if not owner or owner.account_status != "active":
+        return False
+    if not can_view_profile_field(db, owner, viewer.id, "albums"):
+        return False
+    return can_view_audience(db, owner_id=album.owner_id, viewer_id=viewer.id,
+                             audience=album.privacy.value, config=album.audience_config,
+                             restricted=has_restricted(db, album.owner_id, viewer.id))
 
 
 def add_media_once(db: Session, album: Album, url: str | None, media_type: str = "image", caption: str | None = None, privacy: Privacy = Privacy.friends):
@@ -72,8 +91,15 @@ def visible_media(db: Session, album: Album, viewer: User):
     rows = db.query(AlbumMedia).filter(AlbumMedia.album_id == album.id).order_by(AlbumMedia.created_at.desc(), AlbumMedia.id.desc()).all()
     if viewer.id == album.owner_id:
         return rows
-    friends = are_friends(db, album.owner_id, viewer.id)
-    return [x for x in rows if x.privacy == Privacy.public or (x.privacy == Privacy.friends and friends)]
+    visible = []
+    for item in rows:
+        post = db.query(Post).filter(Post.author_id == album.owner_id, Post.image_url == item.media_url).first()
+        if can_view_audience(db, owner_id=album.owner_id, viewer_id=viewer.id,
+                             audience=item.privacy.value,
+                             config=post.audience_config if post else album.audience_config,
+                             restricted=has_restricted(db, album.owner_id, viewer.id)):
+            visible.append(item)
+    return visible
 
 
 def serialize_album(db: Session, album: Album, viewer: User):
@@ -83,6 +109,7 @@ def serialize_album(db: Session, album: Album, viewer: User):
         "name": album.name,
         "description": album.description,
         "privacy": album.privacy.value,
+        "audience": decode_config(album.audience_config) if album.owner_id == viewer.id else None,
         "kind": album.kind or "custom",
         "created_at": album.created_at,
         "media_count": len(media),
@@ -96,6 +123,8 @@ def list_albums(user_id: int, db: Session = Depends(get_db), user: User = Depend
     owner = db.get(User, user_id)
     if not owner:
         raise HTTPException(404, "User not found")
+    if owner.account_status != "active":
+        raise HTTPException(404, "Albums unavailable")
     if owner.id != user.id and is_blocked_either_way(db, owner.id, user.id):
         raise HTTPException(403, "Albums unavailable")
     ensure_system_albums(db, owner)
@@ -105,13 +134,12 @@ def list_albums(user_id: int, db: Session = Depends(get_db), user: User = Depend
 
 @router.post("")
 def create_album(data: AlbumCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    if data.privacy not in {p.value for p in Privacy}:
-        raise HTTPException(400, "Invalid privacy")
+    audience_config = album_audience(db, user, data)
     name = data.name.strip()
     if not name:
         raise HTTPException(400, "Album name is required")
     album = Album(owner_id=user.id, name=name, description=(data.description or "").strip() or None,
-                  privacy=Privacy(data.privacy), kind=None)
+                  privacy=Privacy(data.privacy), audience_config=audience_config, kind=None)
     db.add(album)
     db.commit()
     db.refresh(album)
@@ -139,18 +167,18 @@ def update_album(album_id: int, data: AlbumCreate, db: Session = Depends(get_db)
     album = db.get(Album, album_id)
     if not album or album.owner_id != user.id or album.kind is not None:
         raise HTTPException(404, "Custom album not found")
-    if data.privacy not in {p.value for p in Privacy}:
-        raise HTTPException(400, "Invalid privacy")
+    audience_config = album_audience(db, user, data)
     name = data.name.strip()
     if not name:
         raise HTTPException(400, "Album name is required")
     album.name = name
     album.description = (data.description or "").strip() or None
     album.privacy = Privacy(data.privacy)
+    album.audience_config = audience_config
     db.query(AlbumMedia).filter(AlbumMedia.album_id == album.id).update(
         {AlbumMedia.privacy: album.privacy}, synchronize_session=False)
     db.query(Post).filter(Post.author_id == user.id, Post.album_id == album.id).update(
-        {Post.privacy: album.privacy}, synchronize_session=False)
+        {Post.privacy: album.privacy, Post.audience_config: album.audience_config}, synchronize_session=False)
     db.commit()
     db.refresh(album)
     return serialize_album(db, album, user)
@@ -207,7 +235,8 @@ async def upload_album_media(album_id: int, file: UploadFile = File(...), captio
     db.flush()
     media_label = "video" if row.media_type == "video" else "photo"
     db.add(Post(author_id=user.id, content=f"{user.name} added a new {media_label} to the album {album.name}.",
-                image_url=row.media_url, media_type=row.media_type, album_id=album.id, privacy=album.privacy))
+                image_url=row.media_url, media_type=row.media_type, album_id=album.id,
+                privacy=album.privacy, audience_config=album.audience_config))
     db.commit()
     db.refresh(row)
     return {"id": row.id, "url": row.media_url, "type": row.media_type, "caption": row.caption, "created_at": row.created_at}

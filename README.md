@@ -19,7 +19,9 @@ SocialN kết hợp React 19 + Vite ở frontend, FastAPI + SQLAlchemy ở backe
 
 #### Tài khoản và hồ sơ
 
-- Đăng ký, đăng nhập và đăng xuất bằng JWT.
+- Access token JWT ngắn hạn, refresh-token rotation bằng cookie `HttpOnly`, quản lý/thu hồi phiên theo thiết bị.
+- Xác minh email, đặt lại mật khẩu bằng token một lần và 2FA TOTP kèm recovery codes.
+- Cảnh báo đăng nhập từ thiết bị mới qua thông báo SocialN và email khi SMTP được cấu hình.
 - Hồ sơ theo username, ví dụ `http://localhost:5173/thaituan`.
 - Chỉnh sửa tên, tiểu sử, ngày sinh, quê quán, giới tính và tình trạng quan hệ.
 - Đổi username; mỗi lần đổi cách nhau ít nhất 30 ngày.
@@ -87,30 +89,30 @@ SocialN kết hợp React 19 + Vite ở frontend, FastAPI + SQLAlchemy ở backe
 
 | Thành phần | Công nghệ |
 |---|---|
-| Frontend | React 19.1, Vite 7.1, Lucide React |
+| Frontend | React 19.1, React Router, TanStack Query, Vite 7.1, Lucide React |
 | Backend | Python 3.12, FastAPI 0.116, Uvicorn |
 | ORM / DB | SQLAlchemy 2.0, PyMySQL, MySQL 8.4 |
-| Auth | JWT (`python-jose`), bcrypt/passlib |
-| Realtime | WebSocket + REST polling fallback |
-| Media | Multipart upload, Docker volume |
+| Auth | JWT access token, refresh session, TOTP 2FA, bcrypt/passlib |
+| Realtime | WebSocket + Redis pub/sub/presence; REST polling fallback |
+| Media | S3-compatible object storage (MinIO), thumbnail worker, CDN-ready URLs |
+| Background jobs | Celery + Redis |
+| Migration | Alembic |
+| Observability | Structured logging, request ID, Prometheus `/metrics`, Sentry tùy chọn |
 | GIF | GIPHY Search/Trending qua backend proxy |
 | Local stack | Docker Compose |
 
 ### Kiến trúc
 
 ```text
-Browser
-  └─ React + Vite (:5173)
-      ├─ REST/JSON + multipart ──────┐
-      └─ WebSocket ──────────────────┤
-                                     ▼
-                         FastAPI + Uvicorn (:8000)
-                            ├─ SQLAlchemy ── MySQL (:3306)
-                            ├─ /uploads ──── uploads_data
-                            └─ GIPHY proxy ─ GIPHY API
+Browser → React Router + TanStack Query + feature modules
+    ├─ REST/multipart → FastAPI → SQLAlchemy → MySQL
+    └─ WebSocket ─────→ FastAPI ↔ Redis pub/sub + presence
+                            ├─ S3/MinIO → CDN-ready media URLs
+                            ├─ Celery workers → thumbnail/video/email/export
+                            └─ metrics, structured logs, optional Sentry
 ```
 
-Backend được chia thành các route: `auth`, `users`, `friends`, `posts`, `chat`, `notifications`, `albums`, `upload` và `giphy`.
+Frontend có ranh giới module `feed`, `profile`, `messages`, `groups`, `settings`; phần truy cập API, authentication, WebSocket và notification preferences nằm trong `services/` và `hooks/`. Backend được chia theo route và lớp hạ tầng trong `app/services/`.
 
 ### Cấu trúc dự án
 
@@ -119,12 +121,16 @@ socialn/
 ├── backend/
 │   ├── app/
 │   │   ├── routes/
+│   │   ├── services/
 │   │   ├── auth.py, config.py, database.py
-│   │   ├── main.py, models.py, schemas.py
+│   │   ├── main.py, models.py, schemas.py, worker.py, tasks.py
 │   │   └── notifications.py, utils.py
+│   ├── alembic/
+│   ├── tests/
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
+│   ├── src/features/, src/services/, src/hooks/, src/query/
 │   ├── src/main.jsx
 │   ├── src/styles.css
 │   ├── src/i18n.js
@@ -166,13 +172,17 @@ docker compose up -d --build
 | Swagger UI | http://localhost:8000/docs |
 | ReDoc | http://localhost:8000/redoc |
 | Health check | http://localhost:8000/health |
+| Metrics | http://localhost:8000/metrics |
+| MinIO Console | http://localhost:9001 |
 
 Các lệnh hữu ích:
 
 ```bash
 docker compose ps
-docker compose logs -f backend frontend
-docker compose up -d --build backend frontend
+docker compose logs -f backend worker frontend
+docker compose exec backend alembic current
+docker compose exec backend pytest
+docker compose exec frontend npm test
 docker compose down
 ```
 
@@ -191,10 +201,19 @@ docker compose down -v
 | `MYSQL_USER`, `MYSQL_PASSWORD` | Tài khoản ứng dụng |
 | `DATABASE_URL` | SQLAlchemy connection URL khi chạy thủ công |
 | `JWT_SECRET` | Khóa ký JWT; phải dùng chuỗi ngẫu nhiên dài |
-| `JWT_EXPIRE_MINUTES` | Thời hạn access token, mặc định `1440` phút |
+| `JWT_EXPIRE_MINUTES` | Thời hạn access token, mặc định `15` phút |
+| `REFRESH_TOKEN_DAYS` | Thời hạn tối đa của phiên refresh, mặc định 30 ngày |
+| `AUTH_COOKIE_SECURE` | Đặt `true` khi chạy HTTPS production |
+| `AUTH_ENCRYPTION_KEY` | Khóa riêng dùng mã hóa secret TOTP |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Nhà cung cấp email cho xác minh, reset và cảnh báo đăng nhập |
 | `CORS_ORIGINS` | Danh sách origin frontend, phân cách bằng dấu phẩy |
 | `GIPHY_API_KEY` | GIPHY key dùng ở backend |
-| `UPLOAD_DIR` | Thư mục upload khi chạy backend ngoài Docker |
+| `UPLOAD_DIR` | Thư mục upload khi dùng storage local |
+| `REDIS_URL` | Cache, presence, rate limiting và WebSocket pub/sub |
+| `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Hàng đợi background worker |
+| `STORAGE_BACKEND` | `local` hoặc `s3` |
+| `S3_*`, `CDN_BASE_URL` | Object storage và public/CDN URL |
+| `SENTRY_DSN` | Error tracking tùy chọn |
 | `VITE_API_URL` | Base URL của API mà frontend gọi |
 
 Không commit `.env` hoặc API key. Chỉ commit `.env.example` với giá trị mẫu.
@@ -215,6 +234,7 @@ export CORS_ORIGINS='http://localhost:5173'
 export UPLOAD_DIR='./uploads'
 export GIPHY_API_KEY='your-giphy-api-key'
 
+alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -231,12 +251,15 @@ VITE_API_URL=http://localhost:8000 npm run dev
 - Swagger: `http://localhost:8000/docs`.
 - Import `postman/SocialN.postman_collection.json` và đặt `base_url=http://localhost:8000`.
 - Health check: `curl http://localhost:8000/health`.
+- Unit test chính sách: `cd backend && pytest`.
+- Frontend test: `cd frontend && npm test`.
+- CI tại `.github/workflows/ci.yml` kiểm tra backend, frontend và Docker Compose.
 
 ### Lưu ý production
 
-- Startup hiện gọi `create_all` và bổ sung cột tương thích; production nên dùng Alembic migration.
-- Nên dùng HTTPS/reverse proxy, rate limiting, refresh token, xác minh email và quản lý session.
-- Nên chuyển media sang object storage, quét virus và kiểm duyệt nội dung.
+- Schema chỉ được cập nhật bằng Alembic; container backend chạy `alembic upgrade head` trước Uvicorn.
+- Rate limiting hiện dùng Redis nhưng production vẫn nên có HTTPS/reverse proxy, refresh token, xác minh email và quản lý session.
+- Media đã hỗ trợ object storage/thumbnail/CDN; production nên bổ sung quét virus, kiểm duyệt nội dung và pipeline video chuyên dụng.
 - File chat 2 GB cần cấu hình đồng bộ giới hạn body/timeout ở proxy và hạ tầng.
 - Khi chạy nhiều backend instance, dùng Redis/pub-sub cho WebSocket và presence.
 - Giới hạn/ràng buộc sử dụng GIPHY phụ thuộc tài khoản và điều khoản GIPHY của bạn.
@@ -262,7 +285,9 @@ SocialN combines a React 19 + Vite frontend, a FastAPI + SQLAlchemy backend, and
 
 #### Accounts and profiles
 
-- JWT registration, login, and logout.
+- Short-lived JWT access tokens, HttpOnly refresh-token rotation, and per-device session revocation.
+- Email verification, one-time password reset links, and TOTP 2FA with recovery codes.
+- New-device login alerts through SocialN notifications and email when SMTP is configured.
 - Username-based profile URLs such as `http://localhost:5173/thaituan`.
 - Edit name, bio, date of birth, hometown, gender, and relationship status.
 - Username changes with a 30-day cooldown.
@@ -327,32 +352,34 @@ SocialN combines a React 19 + Vite frontend, a FastAPI + SQLAlchemy backend, and
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19.1, Vite 7.1, Lucide React |
+| Frontend | React 19.1, React Router, TanStack Query, Vite 7.1, Lucide React |
 | Backend | Python 3.12, FastAPI 0.116, Uvicorn |
 | ORM / DB | SQLAlchemy 2.0, PyMySQL, MySQL 8.4 |
-| Authentication | JWT, bcrypt/passlib |
-| Realtime | WebSocket + REST polling fallback |
-| Media | Multipart uploads and Docker volumes |
+| Authentication | JWT access tokens, refresh sessions, TOTP 2FA, bcrypt/passlib |
+| Realtime | WebSocket + Redis pub/sub/presence; REST polling fallback |
+| Media | S3-compatible object storage, thumbnail worker, CDN-ready URLs |
+| Background jobs | Celery + Redis |
+| Migration | Alembic |
+| Observability | Structured logs, request IDs, Prometheus metrics, optional Sentry |
 | GIF | GIPHY Search/Trending through a backend proxy |
 | Local stack | Docker Compose |
 
 ### Architecture and repository layout
 
 ```text
-Browser (React/Vite :5173)
-  ├─ REST/JSON, multipart
-  └─ WebSocket
-        ▼
-FastAPI/Uvicorn :8000
-  ├─ SQLAlchemy → MySQL :3306
-  ├─ /uploads → uploads_data
-  └─ GIPHY proxy → GIPHY API
+Browser → React Router + TanStack Query + feature modules
+  ├─ REST/multipart → FastAPI → SQLAlchemy → MySQL
+  └─ WebSocket ─────→ FastAPI ↔ Redis pub/sub + presence
+                         ├─ S3/MinIO → CDN-ready media URLs
+                         └─ Celery → thumbnail/video/email/export jobs
 ```
 
 ```text
 socialn/
-├── backend/app/        # API, models, schemas, route modules
-├── frontend/src/       # React entry, styles, translations
+├── backend/app/        # API, routes, services, worker and tasks
+├── backend/alembic/    # Versioned database migrations
+├── backend/tests/      # Policy tests
+├── frontend/src/       # Feature modules, services, hooks and UI
 ├── docs/               # Architecture notes
 ├── postman/            # API collection
 ├── .env.example
@@ -360,7 +387,7 @@ socialn/
 └── README.md
 ```
 
-Backend route modules are `auth`, `users`, `friends`, `posts`, `chat`, `notifications`, `albums`, `upload`, and `giphy`.
+Frontend boundaries are `feed`, `profile`, `messages`, `groups`, and `settings`; API, authentication, WebSocket, and notification concerns live in services/hooks. Backend infrastructure lives in `app/services/`.
 
 ### Run with Docker Compose (recommended)
 
@@ -391,13 +418,17 @@ docker compose up -d --build
 | Swagger UI | http://localhost:8000/docs |
 | ReDoc | http://localhost:8000/redoc |
 | Health check | http://localhost:8000/health |
+| Metrics | http://localhost:8000/metrics |
+| MinIO Console | http://localhost:9001 |
 
 Useful commands:
 
 ```bash
 docker compose ps
-docker compose logs -f backend frontend
-docker compose up -d --build backend frontend
+docker compose logs -f backend worker frontend
+docker compose exec backend alembic current
+docker compose exec backend pytest
+docker compose exec frontend npm test
 docker compose down
 ```
 
@@ -416,10 +447,21 @@ docker compose down -v
 | `MYSQL_USER`, `MYSQL_PASSWORD` | Application database account |
 | `DATABASE_URL` | SQLAlchemy connection URL for manual runs |
 | `JWT_SECRET` | JWT signing key; use a long random value |
-| `JWT_EXPIRE_MINUTES` | Access-token lifetime, default `1440` minutes |
+| `JWT_EXPIRE_MINUTES` | Access-token lifetime, default `15` minutes |
+| `REFRESH_TOKEN_DAYS` | Maximum refresh-session lifetime, default 30 days |
+| `AUTH_COOKIE_SECURE` | Set to `true` behind production HTTPS |
+| `AUTH_ENCRYPTION_KEY` | Separate key used to encrypt TOTP secrets |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Email provider for verification, reset and login alerts |
 | `CORS_ORIGINS` | Comma-separated allowed frontend origins |
 | `GIPHY_API_KEY` | Server-side GIPHY API key |
-| `UPLOAD_DIR` | Upload directory for non-Docker backend runs |
+| `UPLOAD_DIR` | Upload directory when local storage is selected |
+| `REDIS_URL` | Cache, presence, rate limiting and WebSocket pub/sub |
+| `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Background task queue |
+| `STORAGE_BACKEND` | `local` or `s3` |
+| `S3_*`, `CDN_BASE_URL` | Object storage and public/CDN URLs |
+| `SENTRY_DSN` | Optional error tracking |
+| `ACCOUNT_DELETION_GRACE_DAYS` | Recovery window before permanent account deletion; default `30` days |
+| `BACKUP_RETENTION_DAYS` | Maximum documented retention for encrypted backups; default `30` days |
 | `VITE_API_URL` | API base URL used by the frontend |
 
 Never commit `.env` or API keys. Commit only `.env.example` with placeholders.
@@ -440,6 +482,7 @@ export CORS_ORIGINS='http://localhost:5173'
 export UPLOAD_DIR='./uploads'
 export GIPHY_API_KEY='your-giphy-api-key'
 
+alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -456,15 +499,21 @@ VITE_API_URL=http://localhost:8000 npm run dev
 - Swagger: `http://localhost:8000/docs`.
 - Import `postman/SocialN.postman_collection.json` and set `base_url=http://localhost:8000`.
 - Health check: `curl http://localhost:8000/health`.
+- Policy tests: `cd backend && pytest`.
+- Frontend tests: `cd frontend && npm test`.
+- `.github/workflows/ci.yml` validates backend, frontend, and Compose builds.
 
 ### Production notes
 
-- Startup currently uses `create_all` and compatibility column additions; use Alembic migrations in production.
-- Add HTTPS/reverse proxying, rate limiting, refresh tokens, email verification, and session management.
+- Schema changes now run only through Alembic; the backend container applies `alembic upgrade head` before Uvicorn.
+- Redis rate limiting is included; production should still add HTTPS/reverse proxying, refresh tokens, email verification, and session management.
+- Object storage, thumbnails and CDN URLs are supported; add virus scanning, content moderation and a dedicated video pipeline for production.
 - Move media to object storage and add malware/content scanning.
 - A 2 GB chat upload requires matching body-size and timeout settings across the proxy and infrastructure.
 - Use Redis/pub-sub for WebSocket delivery and presence when scaling to multiple backend instances.
 - GIPHY usage limits and requirements depend on your GIPHY account and terms.
+- Account deletion first enters a recoverable pending state. Celery Beat checks hourly for expired recovery windows, then removes the live database records and owned media from local/S3 storage.
+- Immutable backups are not modified record-by-record. Deleted account data disappears as encrypted backup generations expire, within `BACKUP_RETENTION_DAYS`; expired accounts are not selectively restored from backups.
 
 ### Troubleshooting
 
