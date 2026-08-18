@@ -123,6 +123,51 @@ class Follow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class FeedAuthorPreference(Base):
+    __tablename__ = "feed_author_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "author_id", name="uq_feed_author_preference"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class FeedPostFeedback(Base):
+    __tablename__ = "feed_post_feedback"
+    __table_args__ = (UniqueConstraint("user_id", "post_id", name="uq_feed_post_feedback"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), index=True)
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False)
+    show_fewer: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SavedPostCollection(Base):
+    __tablename__ = "saved_post_collections"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_saved_collection_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SavedPost(Base):
+    __tablename__ = "saved_posts"
+    __table_args__ = (UniqueConstraint("collection_id", "post_id", name="uq_saved_collection_post"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    collection_id: Mapped[int] = mapped_column(ForeignKey("saved_post_collections.id", ondelete="CASCADE"), index=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), index=True)
+    saved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class Block(Base):
     __tablename__ = "blocks"
     __table_args__ = (

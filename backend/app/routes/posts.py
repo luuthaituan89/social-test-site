@@ -1,18 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query
 from urllib.parse import urlparse
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import (Post, Like, Comment, User, Privacy, Album, AlbumMedia,
+from ..models import (Post, Like, Comment, User, Privacy, Album, AlbumMedia, Follow,
+                      FeedAuthorPreference, FeedPostFeedback, SavedPostCollection, SavedPost,
                       Group, GroupMember, GroupPost, ChatGroup,
                       ChatGroupMember, Message)
-from ..schemas import PostCreate, PostShareIn, CommentCreate, ReactionIn
+from ..schemas import (PostCreate, PostShareIn, CommentCreate, ReactionIn,
+                       FeedAuthorPreferenceIn, SavedCollectionIn, SavePostIn)
 from ..auth import get_current_user
 from ..utils import are_friends, is_blocked_either_way, has_restricted, friend_ids
 from ..notifications import create_notification
 from .notifications import notification_ws
 from ..activity import log_activity
 from ..services.privacy import can_view_audience, decode_config, encode_audience_config
+from ..services.feed import score_post, diversify, encode_cursor, decode_cursor
 
 router = APIRouter(prefix="/api/posts", tags=["Posts"])
 REACTIONS = {"like": ("👍", "liked"), "love": ("❤️", "loved"), "haha": ("😂", "reacted to"), "wow": ("😮", "reacted to"), "sad": ("😢", "reacted to"), "angry": ("😡", "reacted to")}
@@ -119,6 +124,18 @@ def serialize(post: Post, db: Session, viewer: User):
     shared = shared_source_payload(post.shared_post_id, db, viewer) if post.shared_post_id else None
 
     album = db.get(Album, post.album_id) if post.album_id else None
+    author_preference = db.query(FeedAuthorPreference).filter(
+        FeedAuthorPreference.user_id == viewer.id,
+        FeedAuthorPreference.author_id == post.author_id,
+    ).first()
+    following = db.query(Follow.id).filter(
+        Follow.follower_id == viewer.id,
+        Follow.followed_id == post.author_id,
+    ).first() is not None
+    saved = db.query(SavedPost.id).join(SavedPostCollection).filter(
+        SavedPostCollection.user_id == viewer.id,
+        SavedPost.post_id == post.id,
+    ).first() is not None
     return {
         "id": post.id,
         "content": post.content,
@@ -138,6 +155,10 @@ def serialize(post: Post, db: Session, viewer: User):
             "avatar_url": post.author.avatar_url,
         },
         "is_owner": post.author_id == viewer.id,
+        "author_following": following,
+        "author_favorite": bool(author_preference and author_preference.favorite),
+        "author_snoozed": bool(author_preference and author_preference.snoozed_until and author_preference.snoozed_until > datetime.utcnow()),
+        "is_saved": saved,
         "likes_count": len(reaction_rows),
         "liked": my_reaction is not None,
         "my_reaction": my_reaction,
@@ -145,6 +166,199 @@ def serialize(post: Post, db: Session, viewer: User):
         "shares_count": public_share_count(post.shared_post_id or post.id, db),
         "comments": [serialize_comment(c) for c in comments],
     }
+
+
+def _collection(db: Session, user_id: int, collection_id: int | None = None) -> SavedPostCollection:
+    if collection_id:
+        row = db.query(SavedPostCollection).filter(
+            SavedPostCollection.id == collection_id,
+            SavedPostCollection.user_id == user_id,
+        ).first()
+        if not row:
+            raise HTTPException(404, "Collection not found")
+        return row
+    row = db.query(SavedPostCollection).filter(
+        SavedPostCollection.user_id == user_id,
+        SavedPostCollection.name == "Saved posts",
+    ).first()
+    if not row:
+        row = SavedPostCollection(user_id=user_id, name="Saved posts")
+        db.add(row);db.flush()
+    return row
+
+
+@router.get("/feed")
+def smart_feed(
+    cursor: str | None = None,
+    limit: int = Query(default=12, ge=5, le=30),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Ranked, privacy-safe feed with an opaque seen-ID cursor."""
+    now = datetime.utcnow()
+    seen = decode_cursor(cursor)
+    friends = friend_ids(db, user.id)
+    following = {row[0] for row in db.query(Follow.followed_id).filter(Follow.follower_id == user.id).all()}
+    preferences = {row.author_id: row for row in db.query(FeedAuthorPreference).filter(FeedAuthorPreference.user_id == user.id).all()}
+    snoozed = {author_id for author_id, pref in preferences.items() if pref.snoozed_until and pref.snoozed_until > now}
+    feedback_rows = db.query(FeedPostFeedback).filter(FeedPostFeedback.user_id == user.id).all()
+    hidden = {row.post_id for row in feedback_rows if row.hidden or row.show_fewer}
+    show_fewer_authors = {post.author_id for row in feedback_rows if row.show_fewer for post in [db.get(Post, row.post_id)] if post}
+
+    rows = db.query(Post).filter(Post.media_type != "unavailable").order_by(Post.created_at.desc(), Post.id.desc()).limit(600).all()
+    rows = [row for row in rows if row.id not in seen and row.id not in hidden and row.author_id not in snoozed
+            and not has_restricted(db, user.id, row.author_id) and not has_restricted(db, row.author_id, user.id)
+            and can_view(row, db, user)]
+    ids = [row.id for row in rows]
+    reaction_counts = dict(db.query(Like.post_id, func.count(Like.id)).filter(Like.post_id.in_(ids)).group_by(Like.post_id).all()) if ids else {}
+    comment_counts = dict(db.query(Comment.post_id, func.count(Comment.id)).filter(Comment.post_id.in_(ids)).group_by(Comment.post_id).all()) if ids else {}
+    interacted = {row[0] for row in db.query(Like.post_id).filter(Like.user_id == user.id, Like.post_id.in_(ids)).all()} if ids else set()
+    interacted |= {row[0] for row in db.query(Comment.post_id).filter(Comment.author_id == user.id, Comment.post_id.in_(ids)).all()} if ids else set()
+
+    ranked = []
+    for post in rows:
+        relationship_post = post.author_id == user.id or post.author_id in friends or post.author_id in following
+        ranked.append({
+            "id": post.id, "post": post, "author_id": post.author_id,
+            "shared_post_id": post.shared_post_id,
+            "suggested": not relationship_post,
+            "score": score_post(
+                created_at=post.created_at, reactions=reaction_counts.get(post.id, 0),
+                comments=comment_counts.get(post.id, 0), is_friend=post.author_id in friends,
+                is_following=post.author_id in following,
+                is_favorite=bool(preferences.get(post.author_id) and preferences[post.author_id].favorite),
+                viewer_interacted=post.id in interacted,
+                show_fewer_author=post.author_id in show_fewer_authors, now=now,
+            ),
+        })
+    primary = sorted((item for item in ranked if not item["suggested"]), key=lambda item: (item["score"], item["id"]), reverse=True)
+    recommended = sorted((item for item in ranked if item["suggested"]), key=lambda item: (item["score"], item["id"]), reverse=True)
+    # Keep recommendations useful without letting strangers overwhelm the feed.
+    suggestions = recommended[:max(2, limit // 5)]
+    pool = []
+    suggestion_index = 0
+    for index, item in enumerate(primary):
+        pool.append(item)
+        if (index + 1) % 4 == 0 and suggestion_index < len(suggestions):
+            pool.append(suggestions[suggestion_index]);suggestion_index += 1
+    pool.extend(suggestions[suggestion_index:])
+    selected = diversify(pool, limit)
+    selected_ids = [item["id"] for item in selected]
+    saved_ids = {row[0] for row in db.query(SavedPost.post_id).join(SavedPostCollection).filter(
+        SavedPostCollection.user_id == user.id, SavedPost.post_id.in_(selected_ids)).all()} if selected_ids else set()
+    items = []
+    for item in selected:
+        payload = serialize(item["post"], db, user)
+        pref = preferences.get(item["author_id"])
+        payload.update({
+            "feed_score": item["score"],
+            "feed_reason": "Suggested for you" if item["suggested"] else ("Favorite" if pref and pref.favorite else "Following" if item["author_id"] in following else "Friend" if item["author_id"] in friends else None),
+            "author_following": item["author_id"] in following,
+            "author_favorite": bool(pref and pref.favorite),
+            "author_snoozed": bool(pref and pref.snoozed_until and pref.snoozed_until > now),
+            "is_saved": item["id"] in saved_ids,
+        })
+        items.append(payload)
+
+    memberships = {row[0] for row in db.query(GroupMember.group_id).filter(GroupMember.user_id == user.id).all()}
+    group_query = db.query(Group).filter(Group.privacy == "public", Group.visibility == "visible")
+    if memberships:
+        group_query = group_query.filter(~Group.id.in_(memberships))
+    group_candidates = []
+    for group in group_query.order_by(Group.created_at.desc()).limit(40).all():
+        members = {row[0] for row in db.query(GroupMember.user_id).filter(GroupMember.group_id == group.id).all()}
+        friend_members = len(members & friends)
+        group_candidates.append((friend_members * 10 + len(members), group, len(members), friend_members))
+    suggested_groups = [{"id": group.id, "name": group.name, "description": group.description,
+                         "cover_url": group.cover_url, "member_count": member_count,
+                         "friend_members_count": friend_members}
+                        for _, group, member_count, friend_members in sorted(
+                            group_candidates, key=lambda item: (item[0], item[1].created_at), reverse=True)[:4]]
+    all_seen = list(seen) + selected_ids
+    remaining = any(item["id"] not in set(all_seen) for item in ranked)
+    return {"items": items, "next_cursor": encode_cursor(all_seen) if remaining else None,
+            "has_more": remaining, "suggested_groups": suggested_groups}
+
+
+@router.put("/authors/{author_id}/preference")
+def set_author_preference(author_id: int, data: FeedAuthorPreferenceIn,
+                          db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if author_id == user.id or not db.get(User, author_id):
+        raise HTTPException(400, "Invalid author")
+    row = db.query(FeedAuthorPreference).filter(
+        FeedAuthorPreference.user_id == user.id, FeedAuthorPreference.author_id == author_id).first()
+    if not row:
+        row = FeedAuthorPreference(user_id=user.id, author_id=author_id);db.add(row)
+    if data.favorite is not None:
+        row.favorite = data.favorite
+    if data.snooze_days is not None:
+        row.snoozed_until = (datetime.utcnow() + timedelta(days=data.snooze_days)) if data.snooze_days else None
+    row.updated_at = datetime.utcnow();db.commit();db.refresh(row)
+    return {"favorite": row.favorite, "snoozed_until": row.snoozed_until}
+
+
+@router.post("/{post_id}/hide")
+def hide_post(post_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    post = db.get(Post, post_id)
+    if not post or not can_view(post, db, user): raise HTTPException(404, "Post not found")
+    row = db.query(FeedPostFeedback).filter(FeedPostFeedback.user_id == user.id, FeedPostFeedback.post_id == post_id).first()
+    if not row: row = FeedPostFeedback(user_id=user.id, post_id=post_id);db.add(row)
+    row.hidden = True;db.commit()
+    return {"hidden": True}
+
+
+@router.post("/{post_id}/show-fewer")
+def show_fewer(post_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    post = db.get(Post, post_id)
+    if not post or not can_view(post, db, user): raise HTTPException(404, "Post not found")
+    row = db.query(FeedPostFeedback).filter(FeedPostFeedback.user_id == user.id, FeedPostFeedback.post_id == post_id).first()
+    if not row: row = FeedPostFeedback(user_id=user.id, post_id=post_id);db.add(row)
+    row.show_fewer = True;db.commit()
+    return {"show_fewer": True}
+
+
+@router.get("/collections")
+def collections(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(SavedPostCollection).filter(SavedPostCollection.user_id == user.id).order_by(SavedPostCollection.created_at.asc()).all()
+    return [{"id": row.id, "name": row.name,
+             "posts_count": db.query(SavedPost.id).filter(SavedPost.collection_id == row.id).count()} for row in rows]
+
+
+@router.post("/collections")
+def create_collection(data: SavedCollectionIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    name = data.name.strip()
+    exists = db.query(SavedPostCollection).filter(SavedPostCollection.user_id == user.id, func.lower(SavedPostCollection.name) == name.lower()).first()
+    if exists: raise HTTPException(409, "A collection with this name already exists")
+    row = SavedPostCollection(user_id=user.id, name=name);db.add(row);db.commit();db.refresh(row)
+    return {"id": row.id, "name": row.name, "posts_count": 0}
+
+
+@router.get("/collections/{collection_id}")
+def collection_posts(collection_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    collection = _collection(db, user.id, collection_id)
+    rows = db.query(Post).join(SavedPost, SavedPost.post_id == Post.id).filter(SavedPost.collection_id == collection.id).order_by(SavedPost.saved_at.desc()).all()
+    return {"id": collection.id, "name": collection.name,
+            "items": [serialize(post, db, user) for post in rows if can_view(post, db, user)]}
+
+
+@router.post("/{post_id}/save")
+def save_post(post_id: int, data: SavePostIn = SavePostIn(), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    post = db.get(Post, post_id)
+    if not post or not can_view(post, db, user): raise HTTPException(404, "Post not found")
+    collection = _collection(db, user.id, data.collection_id)
+    row = db.query(SavedPost).filter(SavedPost.collection_id == collection.id, SavedPost.post_id == post_id).first()
+    if not row: db.add(SavedPost(collection_id=collection.id, post_id=post_id))
+    db.commit()
+    return {"saved": True, "collection": {"id": collection.id, "name": collection.name}}
+
+
+@router.delete("/{post_id}/save")
+def unsave_post(post_id: int, collection_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    collection_ids = [row[0] for row in db.query(SavedPostCollection.id).filter(SavedPostCollection.user_id == user.id).all()]
+    query = db.query(SavedPost).filter(SavedPost.post_id == post_id, SavedPost.collection_id.in_(collection_ids or [-1]))
+    if collection_id: query = query.filter(SavedPost.collection_id == collection_id)
+    query.delete(synchronize_session=False);db.commit()
+    return {"saved": False}
 
 
 @router.get("")

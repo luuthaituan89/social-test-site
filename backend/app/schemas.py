@@ -134,6 +134,19 @@ class PostShareIn(BaseModel):
     audience: AudienceConfig = Field(default_factory=AudienceConfig)
 
 
+class FeedAuthorPreferenceIn(BaseModel):
+    favorite: Optional[bool] = None
+    snooze_days: Optional[int] = Field(default=None, ge=0, le=30)
+
+
+class SavedCollectionIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class SavePostIn(BaseModel):
+    collection_id: Optional[int] = None
+
+
 class CommentCreate(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
 
