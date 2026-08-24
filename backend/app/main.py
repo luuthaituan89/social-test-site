@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .routes import auth, users, friends, posts, chat, upload, notifications, albums, giphy, activity, groups, data_lifecycle
+from .routes import (auth, users, friends, posts, chat, upload, notifications, albums,
+                     giphy, activity, groups, data_lifecycle, products, search)
 from .services.cache import healthy as redis_healthy
 from .services.observability import RequestContextMiddleware, configure_observability
 from .services.rate_limit import RateLimitMiddleware
@@ -39,7 +40,8 @@ app.add_middleware(RequestContextMiddleware)
 
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
-for route_module in (auth, users, friends, posts, chat, upload, notifications, albums, giphy, activity, groups, data_lifecycle):
+for route_module in (auth, users, friends, posts, chat, upload, notifications, albums,
+                     giphy, activity, groups, data_lifecycle, products, search):
     app.include_router(route_module.router)
 
 configure_observability(app)

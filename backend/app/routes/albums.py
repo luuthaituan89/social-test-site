@@ -21,6 +21,10 @@ SYSTEM_ALBUMS = {
     "timeline": "Timeline photos",
 }
 
+# GIFs selected from GIPHY are post attachments, not uploaded photos.  Keep
+# Timeline photos limited to media that belongs in a user's photo/video album.
+TIMELINE_ALBUM_MEDIA_TYPES = ("image", "video")
+
 
 def album_audience(db: Session, user: User, data: AlbumCreate) -> str | None:
     if data.privacy not in {item.value for item in Privacy}:
@@ -70,7 +74,11 @@ def ensure_system_albums(db: Session, owner: User):
 
     add_media_once(db, albums["profile"], owner.avatar_url, caption="Current profile picture")
     add_media_once(db, albums["cover"], owner.cover_url, caption="Current cover photo")
-    posts = db.query(Post).filter(Post.author_id == owner.id, Post.image_url.isnot(None)).all()
+    posts = db.query(Post).filter(
+        Post.author_id == owner.id,
+        Post.image_url.isnot(None),
+        Post.media_type.in_(TIMELINE_ALBUM_MEDIA_TYPES),
+    ).all()
     timeline_urls = {post.image_url for post in posts if post.image_url}
     timeline_query = db.query(AlbumMedia).filter(AlbumMedia.album_id == albums["timeline"].id)
     if timeline_urls:

@@ -882,3 +882,11 @@ html,body,#root{max-width:100%;overflow-x:clip}
   .message-actions{opacity:1}
   .reaction-picker,.message-reaction-picker{transition:none}
 }
+
+.global-search-results{max-height:min(70vh,560px);overflow:auto}
+.global-search-results .search-kind{display:grid;place-items:center;width:38px;height:38px;flex:0 0 38px;background:var(--metro-accent);color:#fff;font-weight:800;text-transform:uppercase}
+.global-search-results button>span:last-child{min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.message-requests-toggle{display:flex!important;justify-content:space-between;border-block:1px solid var(--border)!important;color:var(--accent)!important}
+.message-requests-toggle b{background:var(--metro-accent);color:#fff;min-width:24px;height:24px;display:grid;place-items:center}
+.message-request-list{padding:6px 0;border-bottom:1px solid var(--border)}
+.message-request-row{padding:7px 4px}.message-request-row>button{padding:4px!important}.message-request-row>div{display:flex;gap:6px;padding:4px}.message-request-row>div button{width:auto;padding:6px 9px;font-size:12px}

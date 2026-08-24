@@ -48,7 +48,38 @@ def process_video(key: str) -> dict:
 
 @celery_app.task(name="notifications.dispatch")
 def dispatch_notification(user_id: int, payload: dict) -> None:
-    logger.info("notification_dispatched", extra={"user_id": user_id, "type": payload.get("type")})
+    from .database import SessionLocal
+    from .models import NotificationPreference, PushSubscription
+
+    if not settings.web_push_private_key or not settings.web_push_public_key:
+        logger.info("notification_in_app_only", extra={"user_id": user_id, "type": payload.get("type")})
+        return
+    db = SessionLocal()
+    try:
+        category = payload.get("category", "other")
+        preference = db.query(NotificationPreference).filter_by(user_id=user_id, category=category).first()
+        if preference and not preference.web_push:
+            return
+        from pywebpush import WebPushException, webpush
+        stale = []
+        for subscription in db.query(PushSubscription).filter_by(user_id=user_id).all():
+            try:
+                webpush(
+                    subscription_info={"endpoint": subscription.endpoint,
+                                       "keys": {"p256dh": subscription.p256dh, "auth": subscription.auth}},
+                    data=json.dumps(payload, ensure_ascii=False),
+                    vapid_private_key=settings.web_push_private_key,
+                    vapid_claims={"sub": settings.web_push_subject},
+                    ttl=86400,
+                )
+            except WebPushException as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                if status in {404, 410}: stale.append(subscription)
+                else: logger.warning("web_push_failed", extra={"user_id": user_id, "status": status})
+        for subscription in stale: db.delete(subscription)
+        if stale: db.commit()
+    finally:
+        db.close()
 
 
 @celery_app.task(name="email.send")

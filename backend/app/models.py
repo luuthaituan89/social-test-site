@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from sqlalchemy import (
-    String, Text, DateTime, Date, ForeignKey, Enum, UniqueConstraint, Boolean
+    String, Text, DateTime, Date, ForeignKey, Enum, UniqueConstraint, Boolean, BigInteger, Float
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
@@ -252,6 +252,9 @@ class Conversation(Base):
     muted_until_b: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     restricted_a: Mapped[bool] = mapped_column(Boolean, default=False)
     restricted_b: Mapped[bool] = mapped_column(Boolean, default=False)
+    request_recipient_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    request_status: Mapped[str] = mapped_column(String(20), default="accepted", index=True)
+    request_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class ChatGroup(Base):
@@ -340,6 +343,11 @@ class Message(Base):
     is_unsent: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    view_once: Mapped[bool] = mapped_column(Boolean, default=False)
+    viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
@@ -535,3 +543,148 @@ class GroupReport(Base):
     reason: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="open", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class MessageReceipt(Base):
+    __tablename__ = "message_receipts"
+    __table_args__ = (UniqueConstraint("message_id", "user_id", name="uq_message_receipt"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ConversationDraft(Base):
+    __tablename__ = "conversation_drafts"
+    __table_args__ = (UniqueConstraint("conversation_id", "user_id", name="uq_conversation_draft"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Story(Base):
+    __tablename__ = "stories"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    content: Mapped[str] = mapped_column(String(1000), default="")
+    media_url: Mapped[str] = mapped_column(String(500))
+    media_type: Mapped[str] = mapped_column(String(20), default="image")
+    privacy: Mapped[Privacy] = mapped_column(Enum(Privacy), default=Privacy.friends)
+    audience_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class StoryView(Base):
+    __tablename__ = "story_views"
+    __table_args__ = (UniqueConstraint("story_id", "viewer_id", name="uq_story_view"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    story_id: Mapped[int] = mapped_column(ForeignKey("stories.id", ondelete="CASCADE"), index=True)
+    viewer_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    viewed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Reel(Base):
+    __tablename__ = "reels"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    caption: Mapped[str] = mapped_column(String(2200), default="")
+    video_url: Mapped[str] = mapped_column(String(500))
+    thumbnail_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    privacy: Mapped[Privacy] = mapped_column(Enum(Privacy), default=Privacy.public)
+    audience_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    views_count: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class SocialPage(Base):
+    __tablename__ = "social_pages"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(150), index=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    category: Mapped[str] = mapped_column(String(80), default="community", index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PageFollower(Base):
+    __tablename__ = "page_followers"
+    __table_args__ = (UniqueConstraint("page_id", "user_id", name="uq_page_follower"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    page_id: Mapped[int] = mapped_column(ForeignKey("social_pages.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    followed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SocialEvent(Base):
+    __tablename__ = "social_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    group_id: Mapped[int | None] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True)
+    page_id: Mapped[int | None] = mapped_column(ForeignKey("social_pages.id", ondelete="CASCADE"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(200), index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    location_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    privacy: Mapped[str] = mapped_column(String(20), default="public", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class EventResponse(Base):
+    __tablename__ = "event_responses"
+    __table_args__ = (UniqueConstraint("event_id", "user_id", name="uq_event_response"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("social_events.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    response: Mapped[str] = mapped_column(String(20), default="interested", index=True)
+    responded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MarketplaceListing(Base):
+    __tablename__ = "marketplace_listings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    seller_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(180), index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    price_minor: Mapped[int] = mapped_column(BigInteger, default=0, index=True)
+    currency: Mapped[str] = mapped_column(String(3), default="VND")
+    condition: Mapped[str] = mapped_column(String(30), default="used")
+    location_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    media_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class NotificationPreference(Base):
+    __tablename__ = "notification_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "category", name="uq_notification_preference"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    category: Mapped[str] = mapped_column(String(40), index=True)
+    in_app: Mapped[bool] = mapped_column(Boolean, default=True)
+    web_push: Mapped[bool] = mapped_column(Boolean, default=True)
+    email: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    endpoint: Mapped[str] = mapped_column(Text)
+    p256dh: Mapped[str] = mapped_column(String(255))
+    auth: Mapped[str] = mapped_column(String(255))
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

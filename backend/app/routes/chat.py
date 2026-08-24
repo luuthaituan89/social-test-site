@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from sqlalchemy.exc import IntegrityError
@@ -11,10 +11,14 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from ..database import get_db, SessionLocal
-from ..models import AuthSession, User, Conversation, Message, MessageReaction, Block, ChatGroup, ChatGroupMember, ChatGroupJoinRequest, ChatPoll, ChatPollOption, ChatPollVote
+from ..models import (AuthSession, User, Conversation, ConversationDraft, Message,
+                      MessageReaction, MessageReceipt, Block, ChatGroup,
+                      ChatGroupMember, ChatGroupJoinRequest, ChatPoll,
+                      ChatPollOption, ChatPollVote)
 from ..auth import get_current_user
 from ..config import settings
-from ..schemas import MessageCreate, ReactionIn, ChatGroupCreate, ChatGroupUpdate, ChatPollCreate, DirectChatUpdate
+from ..schemas import (MessageCreate, MessageEditIn, ConversationDraftIn, ReactionIn,
+                       ChatGroupCreate, ChatGroupUpdate, ChatPollCreate, DirectChatUpdate)
 from ..notifications import create_notification
 from ..utils import are_friends, has_restricted
 from .notifications import notification_ws
@@ -91,6 +95,12 @@ def serialize_message(msg: Message, other_user_id: int, db: Session | None = Non
         "is_forwarded": bool(msg.forwarded_from_id),
         "is_pinned": msg.is_pinned,
         "is_unsent": msg.is_unsent,
+        "delivery_status": "seen" if msg.read_at or msg.is_read else "delivered" if msg.delivered_at else "sent",
+        "delivered_at": msg.delivered_at,
+        "read_at": msg.read_at,
+        "edited_at": msg.edited_at,
+        "view_once": msg.view_once,
+        "viewed_at": msg.viewed_at,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
     }
     if db and msg.message_type == "poll" and msg.attachment_name:
@@ -533,6 +543,8 @@ def conversations(
         state = conversation_state(conv, user.id)
         if state["restricted"]:
             continue
+        if conv.request_recipient_id == user.id and conv.request_status in {"pending", "spam"}:
+            continue
         last_query = (
             db.query(Message)
             .filter(Message.conversation_id == conv.id)
@@ -560,6 +572,7 @@ def conversations(
             "pinned": state["pinned"],
             "archived": state["archived"],
             "unread_count": unread_query.count(),
+            "request_status": conv.request_status,
         })
 
     memberships = db.query(ChatGroupMember).filter(ChatGroupMember.user_id == user.id).all()
@@ -595,7 +608,7 @@ def unread_message_count(db: Session = Depends(get_db), user: User = Depends(get
     total = 0
     for conv in rows:
         state = conversation_state(conv, user.id)
-        if state["restricted"]:
+        if state["restricted"] or (conv.request_recipient_id == user.id and conv.request_status in {"pending", "spam"}):
             continue
         query = db.query(Message).filter(
             Message.conversation_id == conv.id,
@@ -613,6 +626,55 @@ def unread_message_count(db: Session = Depends(get_db), user: User = Depends(get
             if membership.last_read_at: query = query.filter(Message.created_at > membership.last_read_at)
             total += query.count()
     return {"unread_count": total}
+
+
+def _request_summary(db: Session, conv: Conversation, user_id: int):
+    other_id = conv.user_b_id if conv.user_a_id == user_id else conv.user_a_id
+    other = db.get(User, other_id)
+    last = db.query(Message).filter_by(conversation_id=conv.id).order_by(Message.id.desc()).first()
+    return {"id": conv.id, "status": conv.request_status, "updated_at": conv.request_updated_at,
+            "user": {"id": other.id, "name": other.name, "username": other.username,
+                     "avatar_url": other.avatar_url} if other else None,
+            "last_message": notification_message_preview(last) if last else "",
+            "last_at": last.created_at if last else conv.created_at}
+
+
+@router.get("/message-requests")
+def message_requests(folder: str = Query("requests", pattern="^(requests|spam)$"),
+                     db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    status = "spam" if folder == "spam" else "pending"
+    rows = db.query(Conversation).filter(Conversation.request_recipient_id == user.id,
+                                         Conversation.request_status == status).order_by(Conversation.request_updated_at.desc()).all()
+    return [_request_summary(db, row, user.id) for row in rows]
+
+
+def _owned_message_request(db: Session, conversation_id: int, user_id: int):
+    row = db.query(Conversation).filter(Conversation.id == conversation_id,
+                                        Conversation.request_recipient_id == user_id,
+                                        Conversation.request_status.in_(["pending", "spam"])).first()
+    if not row: raise HTTPException(404, "Message request not found")
+    return row
+
+
+@router.post("/message-requests/{conversation_id}/accept")
+def accept_message_request(conversation_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    row = _owned_message_request(db, conversation_id, user.id)
+    row.request_status, row.request_recipient_id, row.request_updated_at = "accepted", None, datetime.utcnow()
+    db.commit(); return {"accepted": True, "conversation_id": row.id}
+
+
+@router.post("/message-requests/{conversation_id}/spam")
+def spam_message_request(conversation_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    row = _owned_message_request(db, conversation_id, user.id)
+    row.request_status, row.request_updated_at = "spam", datetime.utcnow()
+    db.commit(); return {"spam": True}
+
+
+@router.delete("/message-requests/{conversation_id}", status_code=204)
+def delete_message_request(conversation_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    row = _owned_message_request(db, conversation_id, user.id)
+    db.query(Message).filter_by(conversation_id=row.id).delete(synchronize_session=False)
+    db.delete(row); db.commit()
 
 
 @router.get("/presence/{other_user_id}")
@@ -774,6 +836,8 @@ def update_direct_settings(other_user_id: int, data: DirectChatUpdate, db: Sessi
 @router.get("/{other_user_id}/messages")
 def messages(
     other_user_id: int,
+    before_id: int | None = None,
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -790,22 +854,25 @@ def messages(
     db.query(Message).filter(Message.conversation_id == conv.id, Message.expires_at != None, Message.expires_at <= datetime.utcnow()).delete(synchronize_session=False)
     db.commit()
     query = db.query(Message).filter(Message.conversation_id == conv.id)
+    if before_id:
+        query = query.filter(Message.id < before_id)
     state = conversation_state(conv, user.id)
     if state["cleared_at"]:
         query = query.filter(Message.created_at > state["cleared_at"])
     rows = (
-        query
-        .order_by(Message.created_at.asc(), Message.id.asc())
-        .limit(500)
-        .all()
+        query.order_by(Message.id.desc()).limit(limit).all()
     )
+    rows.reverse()
 
     changed = False
     for msg in rows:
         # Restricted chats may be read privately without producing Seen or
         # starting a disappearing-message timer for the sender.
-        if msg.sender_id == other_user_id and not msg.is_read and not state["restricted"]:
+        request_unaccepted = conv.request_recipient_id == user.id and conv.request_status in {"pending", "spam"}
+        if msg.sender_id == other_user_id and not msg.is_read and not state["restricted"] and not request_unaccepted:
             msg.is_read = True
+            msg.delivered_at = msg.delivered_at or datetime.utcnow()
+            msg.read_at = datetime.utcnow()
             if conv.disappearing_seconds:
                 msg.expires_at = datetime.utcnow() + timedelta(seconds=conv.disappearing_seconds)
             changed = True
@@ -823,7 +890,7 @@ def messages(
         "from_user_id": m.sender_id,
         "content": m.content,
         "message_type": m.message_type,
-        "attachment_url": m.attachment_url,
+        "attachment_url": None if m.view_once and m.viewed_at and m.sender_id != user.id else m.attachment_url,
         "attachment_name": m.attachment_name,
         "attachment_mime": m.attachment_mime,
         "sticker": m.sticker,
@@ -833,6 +900,12 @@ def messages(
         "is_forwarded": bool(m.forwarded_from_id),
         "is_pinned": m.is_pinned,
         "is_unsent": m.is_unsent,
+        "delivery_status": "seen" if m.read_at or m.is_read else "delivered" if m.delivered_at else "sent",
+        "delivered_at": m.delivered_at,
+        "read_at": m.read_at,
+        "edited_at": m.edited_at,
+        "view_once": m.view_once,
+        "viewed_at": m.viewed_at,
         "reaction_counts": reaction_counts,
         "my_reaction": my_reaction,
         "created_at": m.created_at.isoformat() if m.created_at else None,
@@ -869,8 +942,21 @@ async def send_message(
         hostname = (urlparse(data.attachment_url or "").hostname or "").lower()
         if hostname != "giphy.com" and not hostname.endswith(".giphy.com"):
             raise HTTPException(400, "Invalid GIPHY URL")
+    if data.view_once and data.message_type not in {"image", "video"}:
+        raise HTTPException(400, "View once is only available for photos and videos")
 
     conv = get_or_create_conversation(db, user.id, other_user_id)
+    first_message = db.query(Message.id).filter(Message.conversation_id == conv.id).first() is None
+    if other_user_id != user.id and first_message and not are_friends(db, user.id, other_user_id):
+        conv.request_recipient_id = other_user_id
+        conv.request_status = "pending"
+        conv.request_updated_at = datetime.utcnow()
+    elif conv.request_recipient_id == user.id and conv.request_status in {"pending", "spam"}:
+        # Replying is an explicit acceptance of the request.
+        conv.request_recipient_id, conv.request_status = None, "accepted"
+        conv.request_updated_at = datetime.utcnow()
+    elif conv.request_recipient_id == other_user_id and conv.request_status == "pending":
+        conv.request_updated_at = datetime.utcnow()
     set_conversation_state(conv, user.id, "archived", False)
     if other_user_id != user.id:
         set_conversation_state(conv, other_user_id, "archived", False)
@@ -888,6 +974,7 @@ async def send_message(
         attachment_mime=data.attachment_mime,
         sticker=data.sticker,
         reply_to_id=reply_to.id if reply_to else None,
+        view_once=data.view_once,
         is_read=False,
     )
     db.add(msg)
@@ -895,7 +982,12 @@ async def send_message(
 
     recipient_restricted_sender = conversation_state(conv, other_user_id)["restricted"]
     recipient_muted = direct_recipient_muted(conv, other_user_id)
-    if other_user_id != user.id and not recipient_restricted_sender and not recipient_muted:
+    request_pending = conv.request_recipient_id == other_user_id and conv.request_status in {"pending", "spam"}
+    if other_user_id != user.id and request_pending and first_message:
+        create_notification(db, user_id=other_user_id, actor_id=user.id, type="message_request",
+                            message=f"{user.name} sent you a message request",
+                            entity_type="conversation", entity_id=conv.id)
+    elif other_user_id != user.id and not recipient_restricted_sender and not recipient_muted:
         create_notification(
             db,
             user_id=other_user_id,
@@ -912,10 +1004,13 @@ async def send_message(
     payload = {**serialize_message(msg, other_user_id, db), "reaction_counts": {}, "my_reaction": None}
 
     await manager.send_user(user.id, payload)
-    if other_user_id != user.id:
+    if other_user_id != user.id and not request_pending:
         await manager.send_user(other_user_id, payload)
 
     try:
+        if request_pending:
+            await notification_ws.send(other_user_id, {"type": "notification_refresh", "reason": "message_request"})
+            return payload
         if other_user_id == user.id or recipient_restricted_sender:
             return payload
         await notification_ws.send(other_user_id, message_notification_payload(
@@ -935,6 +1030,64 @@ def owned_chat_message(db: Session, message_id: int, user_id: int):
     if not msg or not conv or user_id not in conversation_participant_ids(db, conv):
         raise HTTPException(404, "Message not found")
     return msg, conv
+
+
+@router.patch("/messages/{message_id}")
+async def edit_message(message_id: int, data: MessageEditIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    msg, conv = owned_chat_message(db, message_id, user.id)
+    if msg.sender_id != user.id: raise HTTPException(403, "You can only edit your own messages")
+    if msg.is_unsent or msg.message_type != "text": raise HTTPException(400, "Only text messages can be edited")
+    if msg.created_at < datetime.utcnow() - timedelta(minutes=15): raise HTTPException(400, "The 15-minute edit window has expired")
+    msg.content, msg.edited_at = data.content.strip(), datetime.utcnow()
+    db.commit()
+    payload = {"type": "message_updated", "message_id": msg.id, "content": msg.content,
+               "edited_at": msg.edited_at.isoformat()}
+    for participant_id in conversation_participant_ids(db, conv): await manager.send_user(participant_id, payload)
+    return payload
+
+
+@router.post("/messages/{message_id}/view-once")
+def open_view_once(message_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    msg, _ = owned_chat_message(db, message_id, user.id)
+    if not msg.view_once or msg.sender_id == user.id: raise HTTPException(400, "This is not a received view-once message")
+    if msg.viewed_at: raise HTTPException(410, "This media has already been viewed")
+    msg.viewed_at = datetime.utcnow(); url = msg.attachment_url; db.commit()
+    return {"attachment_url": url, "viewed_at": msg.viewed_at}
+
+
+@router.get("/conversations/{conversation_id}/search")
+def search_conversation(conversation_id: int, q: str = Query(min_length=1, max_length=200),
+                        before_id: int | None = None, limit: int = Query(30, ge=1, le=100),
+                        db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    conv = db.get(Conversation, conversation_id)
+    if not conv or user.id not in conversation_participant_ids(db, conv): raise HTTPException(404, "Conversation not found")
+    query = db.query(Message).filter(Message.conversation_id == conv.id, Message.is_unsent == False,
+                                     Message.content.ilike(f"%{q.strip()}%"))
+    if before_id: query = query.filter(Message.id < before_id)
+    rows = query.order_by(Message.id.desc()).limit(limit).all()
+    return [{**serialize_message(row, user.id, db), "reaction_counts": message_reaction_state(db, row.id, user.id)[0]}
+            for row in rows]
+
+
+@router.get("/conversations/{conversation_id}/draft")
+def get_draft(conversation_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    conv = db.get(Conversation, conversation_id)
+    if not conv or user.id not in conversation_participant_ids(db, conv): raise HTTPException(404, "Conversation not found")
+    row = db.query(ConversationDraft).filter_by(conversation_id=conv.id, user_id=user.id).first()
+    return {"content": row.content if row else "", "updated_at": row.updated_at if row else None}
+
+
+@router.put("/conversations/{conversation_id}/draft")
+def save_draft(conversation_id: int, data: ConversationDraftIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    conv = db.get(Conversation, conversation_id)
+    if not conv or user.id not in conversation_participant_ids(db, conv): raise HTTPException(404, "Conversation not found")
+    row = db.query(ConversationDraft).filter_by(conversation_id=conv.id, user_id=user.id).first()
+    if not data.content:
+        if row: db.delete(row); db.commit()
+        return {"content": "", "updated_at": None}
+    if not row: row = ConversationDraft(conversation_id=conv.id, user_id=user.id); db.add(row)
+    row.content, row.updated_at = data.content, datetime.utcnow(); db.commit()
+    return {"content": row.content, "updated_at": row.updated_at}
 
 
 @router.post("/messages/{message_id}/pin")

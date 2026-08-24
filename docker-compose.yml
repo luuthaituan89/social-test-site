@@ -92,6 +92,9 @@ services:
       S3_BUCKET: socialn-media
       CDN_BASE_URL: ${CDN_BASE_URL:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      WEB_PUSH_PUBLIC_KEY: ${WEB_PUSH_PUBLIC_KEY:-}
+      WEB_PUSH_PRIVATE_KEY: ${WEB_PUSH_PRIVATE_KEY:-}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-mailto:admin@socialn.local}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       ACCOUNT_DELETION_GRACE_DAYS: ${ACCOUNT_DELETION_GRACE_DAYS:-30}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
@@ -133,6 +136,9 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-SocialN <no-reply@socialn.local>}
       SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      WEB_PUSH_PUBLIC_KEY: ${WEB_PUSH_PUBLIC_KEY:-}
+      WEB_PUSH_PRIVATE_KEY: ${WEB_PUSH_PRIVATE_KEY:-}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-mailto:admin@socialn.local}
     depends_on:
       db:
         condition: service_healthy

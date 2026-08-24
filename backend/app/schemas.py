@@ -163,6 +163,81 @@ class MessageCreate(BaseModel):
     attachment_mime: Optional[str] = Field(default=None, max_length=120)
     sticker: Optional[str] = Field(default=None, max_length=2000)
     reply_to_id: Optional[int] = None
+    view_once: bool = False
+
+
+class MessageEditIn(BaseModel):
+    content: str = Field(min_length=1, max_length=5000)
+
+
+class ConversationDraftIn(BaseModel):
+    content: str = Field(default="", max_length=5000)
+
+
+class StoryCreate(BaseModel):
+    content: str = Field(default="", max_length=1000)
+    media_url: str = Field(min_length=1, max_length=500)
+    media_type: Literal["image", "video"] = "image"
+    privacy: AudienceName = "friends"
+    audience: AudienceConfig = Field(default_factory=AudienceConfig)
+
+
+class ReelCreate(BaseModel):
+    caption: str = Field(default="", max_length=2200)
+    video_url: str = Field(min_length=1, max_length=500)
+    thumbnail_url: Optional[str] = Field(default=None, max_length=500)
+    privacy: AudienceName = "public"
+    audience: AudienceConfig = Field(default_factory=AudienceConfig)
+
+
+class PageCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=150)
+    slug: str = Field(min_length=3, max_length=100, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    category: str = Field(default="community", min_length=2, max_length=80)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    avatar_url: Optional[str] = Field(default=None, max_length=500)
+    cover_url: Optional[str] = Field(default=None, max_length=500)
+
+
+class EventCreate(BaseModel):
+    title: str = Field(min_length=2, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=10000)
+    cover_url: Optional[str] = Field(default=None, max_length=500)
+    location_name: Optional[str] = Field(default=None, max_length=255)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    starts_at: datetime
+    ends_at: Optional[datetime] = None
+    privacy: Literal["public", "private"] = "public"
+    group_id: Optional[int] = None
+    page_id: Optional[int] = None
+
+
+class EventResponseIn(BaseModel):
+    response: Literal["going", "interested", "not_going"]
+
+
+class MarketplaceCreate(BaseModel):
+    title: str = Field(min_length=2, max_length=180)
+    description: Optional[str] = Field(default=None, max_length=10000)
+    price_minor: int = Field(default=0, ge=0)
+    currency: str = Field(default="VND", min_length=3, max_length=3)
+    condition: Literal["new", "like_new", "good", "fair", "used"] = "used"
+    location_name: Optional[str] = Field(default=None, max_length=255)
+    media_url: Optional[str] = Field(default=None, max_length=500)
+
+
+class NotificationPreferenceIn(BaseModel):
+    category: Literal["messages", "friend_requests", "comments", "reactions", "groups", "security", "other"]
+    in_app: bool = True
+    web_push: bool = True
+    email: bool = False
+
+
+class PushSubscriptionIn(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=4000)
+    p256dh: str = Field(min_length=1, max_length=255)
+    auth: str = Field(min_length=1, max_length=255)
 
 
 class ChatGroupCreate(BaseModel):

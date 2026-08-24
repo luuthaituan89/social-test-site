@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from datetime import datetime
+import hashlib
+
+from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from ..config import settings
 from ..database import get_db, SessionLocal
-from ..models import AuthSession, Notification, User
+from ..models import AuthSession, Notification, NotificationPreference, PushSubscription, User
+from ..schemas import NotificationPreferenceIn, PushSubscriptionIn
 from ..auth import get_current_user
 from ..services.realtime import DistributedSocketManager
 
@@ -47,6 +51,53 @@ def read_one(notification_id: int, db: Session = Depends(get_db), user: User = D
     n.is_read = True
     db.commit()
     return {"message": "Notification marked as read"}
+
+
+@router.get("/preferences/all")
+def notification_preferences(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    saved = {row.category: row for row in db.query(NotificationPreference).filter_by(user_id=user.id).all()}
+    categories = ("messages", "friend_requests", "comments", "reactions", "groups", "security", "other")
+    return [{"category": category, "in_app": saved.get(category).in_app if category in saved else True,
+             "web_push": saved.get(category).web_push if category in saved else True,
+             "email": saved.get(category).email if category in saved else False} for category in categories]
+
+
+@router.put("/preferences")
+def update_notification_preference(data: NotificationPreferenceIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    row = db.query(NotificationPreference).filter_by(user_id=user.id, category=data.category).first()
+    if not row:
+        row = NotificationPreference(user_id=user.id, category=data.category); db.add(row)
+    row.in_app, row.web_push, row.email = data.in_app, data.web_push, data.email
+    row.updated_at = datetime.utcnow(); db.commit()
+    return data.model_dump()
+
+
+@router.get("/push/public-key")
+def push_public_key():
+    return {"enabled": bool(settings.web_push_public_key and settings.web_push_private_key),
+            "public_key": settings.web_push_public_key or None}
+
+
+@router.post("/push/subscriptions", status_code=201)
+def subscribe_push(data: PushSubscriptionIn, user_agent: str | None = Header(default=None),
+                   db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if not settings.web_push_public_key or not settings.web_push_private_key:
+        raise HTTPException(503, "Web Push is not configured")
+    digest = hashlib.sha256(data.endpoint.encode()).hexdigest()
+    row = db.query(PushSubscription).filter_by(endpoint_hash=digest).first()
+    if not row:
+        row = PushSubscription(user_id=user.id, endpoint_hash=digest, endpoint=data.endpoint,
+                               p256dh=data.p256dh, auth=data.auth); db.add(row)
+    row.user_id, row.endpoint, row.p256dh, row.auth = user.id, data.endpoint, data.p256dh, data.auth
+    row.user_agent, row.last_used_at = user_agent, datetime.utcnow(); db.commit()
+    return {"subscribed": True}
+
+
+@router.delete("/push/subscriptions", status_code=204)
+def unsubscribe_push(endpoint: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    digest = hashlib.sha256(endpoint.encode()).hexdigest()
+    row = db.query(PushSubscription).filter_by(user_id=user.id, endpoint_hash=digest).first()
+    if row: db.delete(row); db.commit()
 
 
 def record_last_seen(user_id: int):

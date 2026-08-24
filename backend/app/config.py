@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     account_deletion_grace_days: int = 30
     backup_retention_days: int = 30
+    web_push_public_key: str = ""
+    web_push_private_key: str = ""
+    web_push_subject: str = "mailto:admin@socialn.local"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
