@@ -632,20 +632,43 @@ def _request_summary(db: Session, conv: Conversation, user_id: int):
     other_id = conv.user_b_id if conv.user_a_id == user_id else conv.user_a_id
     other = db.get(User, other_id)
     last = db.query(Message).filter_by(conversation_id=conv.id).order_by(Message.id.desc()).first()
+    unread_count = db.query(Message).filter(
+        Message.conversation_id == conv.id,
+        Message.sender_id != user_id,
+        Message.is_read == False,
+    ).count()
     return {"id": conv.id, "status": conv.request_status, "updated_at": conv.request_updated_at,
             "user": {"id": other.id, "name": other.name, "username": other.username,
                      "avatar_url": other.avatar_url} if other else None,
             "last_message": notification_message_preview(last) if last else "",
-            "last_at": last.created_at if last else conv.created_at}
+            "last_message_type": last.message_type if last else None,
+            "last_at": last.created_at if last else conv.created_at,
+            "unread_count": unread_count}
 
 
 @router.get("/message-requests")
-def message_requests(folder: str = Query("requests", pattern="^(requests|spam)$"),
+def message_requests(folder: str = Query("requests", pattern="^(requests|spam|restricted)$"),
                      db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if folder == "restricted":
+        rows = db.query(Conversation).filter(or_(
+            and_(Conversation.user_a_id == user.id, Conversation.restricted_a == True),
+            and_(Conversation.user_b_id == user.id, Conversation.restricted_b == True),
+        )).all()
+        result = []
+        for row in rows:
+            item = _request_summary(db, row, user.id)
+            if item["user"]:
+                item["status"] = "restricted"
+                result.append(item)
+        return sorted(result, key=lambda item: item["last_at"], reverse=True)
+
     status = "spam" if folder == "spam" else "pending"
     rows = db.query(Conversation).filter(Conversation.request_recipient_id == user.id,
                                          Conversation.request_status == status).order_by(Conversation.request_updated_at.desc()).all()
-    return [_request_summary(db, row, user.id) for row in rows]
+    # Restricted conversations have their own folder and must not appear in
+    # Requests/Spam at the same time.
+    return [_request_summary(db, row, user.id) for row in rows
+            if not conversation_state(row, user.id)["restricted"]]
 
 
 def _owned_message_request(db: Session, conversation_id: int, user_id: int):
@@ -668,6 +691,15 @@ def spam_message_request(conversation_id: int, db: Session = Depends(get_db), us
     row = _owned_message_request(db, conversation_id, user.id)
     row.request_status, row.request_updated_at = "spam", datetime.utcnow()
     db.commit(); return {"spam": True}
+
+
+@router.post("/message-requests/{conversation_id}/restore")
+def restore_message_request(conversation_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    row = _owned_message_request(db, conversation_id, user.id)
+    if row.request_status != "spam":
+        raise HTTPException(400, "Only spam requests can be restored")
+    row.request_status, row.request_updated_at = "pending", datetime.utcnow()
+    db.commit(); return {"restored": True, "conversation_id": row.id}
 
 
 @router.delete("/message-requests/{conversation_id}", status_code=204)

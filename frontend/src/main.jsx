@@ -677,6 +677,20 @@ function ConversationRow({conversation,active,onOpen,onChanged,onDeleted,persona
   </div>
 }
 
+function MessageMailboxRow({item,folder,active,onOpen,onAction}){
+  const label={requests:"Message request",spam:"Spam",restricted:"Restricted"}[folder];
+  return <div className={`message-mailbox-row ${active?"active":""} ${item.unread_count>0?"has-unread":""}`}>
+    <button className="message-mailbox-main" onClick={onOpen}><Avatar user={item.user}/><span><b>{item.user?.name}</b><small>{item.last_message||label}</small></span></button>
+    {item.unread_count>0&&<b className="conversation-unread-count">{item.unread_count>99?"99+":item.unread_count}</b>}
+    <div className="message-mailbox-actions">
+      {folder==="requests"&&<><button className="primary" onClick={()=>onAction("accept")}>Accept</button><button className="secondary" onClick={()=>onAction("spam")}>Spam</button></>}
+      {folder==="spam"&&<><button className="primary" onClick={()=>onAction("accept")}>Accept</button><button className="secondary" onClick={()=>onAction("restore")}>Not spam</button></>}
+      {folder==="restricted"&&<button className="secondary" onClick={()=>onAction("unrestrict")}>Unrestrict</button>}
+      {folder!=="restricted"&&<button className="message-mailbox-delete" title="Delete request" onClick={()=>onAction("delete")}><Trash2 size={16}/></button>}
+    </div>
+  </div>
+}
+
 function NewGroupChatModal({friends,onClose,onCreate}){
   const[name,setName]=useState(""),[query,setQuery]=useState(""),[selected,setSelected]=useState([]),[approval,setApproval]=useState(false);
   const visible=friends.filter(x=>`${x.name} ${x.username}`.toLowerCase().includes(query.toLowerCase()));
@@ -728,7 +742,7 @@ function MediaPreview({media,onClose}){
   </div></div>
 }
 
-function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,onMobileBack,friends=[]}){
+function Chat({me,target,open,onChanged,onSent,onRequestAction,onGroupActivated,onGroupSettingsChanged,onMobileBack,friends=[]}){
   const [messages,setMessages]=useState([]);
   const [text,setText]=useState("");
   const [connected,setConnected]=useState(false);
@@ -981,6 +995,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
       mergeMessages(sent);
       if(!target.is_group_draft)await loadHistory(true);
       onChanged?.();
+      onSent?.();
     }catch(e){
       console.error("Send message failed:",e);
       setText(value);
@@ -1019,7 +1034,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
       const uploaded=await api("/api/chat/upload",{method:"POST",body:fd});
       const messageData={content:"",message_type:forcedType||uploaded.message_type,attachment_url:uploaded.url,attachment_name:uploaded.name,attachment_mime:uploaded.mime,reply_to_id:replyingTo?.id||null};
       const result=await api(target.is_group_draft?"/api/chat/group-conversations":target.is_group?`/api/chat/group-conversations/${target.group_chat_id}/messages`:`/api/chat/${target.id}/messages`,{method:"POST",body:JSON.stringify(target.is_group_draft?{name:target.name,member_ids:target.member_ids,require_admin_approval:target.require_admin_approval,first_message:messageData}:messageData)});
-      mergeMessages(result.message||result);if(target.is_group_draft)onGroupActivated?.({...result.group,id:result.group.id,group_chat_id:result.group.id});setReplyingTo(null);onChanged?.();
+      mergeMessages(result.message||result);if(target.is_group_draft)onGroupActivated?.({...result.group,id:result.group.id,group_chat_id:result.group.id});setReplyingTo(null);onChanged?.();onSent?.();
     }catch(e){alert(`Could not send attachment: ${e.message}`)}finally{setSending(false)}
   }
 
@@ -1087,7 +1102,7 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
     try{const result=await api(`/api/chat/group-conversations/${target.group_chat_id}/polls`,{method:"POST",body:JSON.stringify({question:pollQuestion,options:pollOptions})});mergeMessages(result);setPollOpen(false);setPollQuestion("");setPollOptions(["",""])}catch(e){alert(e.message)}
   }
   async function votePoll(pollId,optionId){try{const result=await api(`/api/chat/polls/${pollId}/vote/${optionId}`,{method:"POST"});mergeMessages(result)}catch(e){alert(e.message)}}
-  async function sendQuickReaction(){try{const endpoint=target.is_group?`/api/chat/group-conversations/${target.group_chat_id}/messages`:`/api/chat/${target.id}/messages`,reaction=(target.is_group?target.quick_reaction:directSettings?.quick_reaction)||"👍";const result=await api(endpoint,{method:"POST",body:JSON.stringify({content:"",message_type:"sticker",sticker:JSON.stringify([reaction])})});mergeMessages(result);onChanged?.()}catch(e){alert(e.message)}}
+  async function sendQuickReaction(){try{const endpoint=target.is_group?`/api/chat/group-conversations/${target.group_chat_id}/messages`:`/api/chat/${target.id}/messages`,reaction=(target.is_group?target.quick_reaction:directSettings?.quick_reaction)||"👍";const result=await api(endpoint,{method:"POST",body:JSON.stringify({content:"",message_type:"sticker",sticker:JSON.stringify([reaction])})});mergeMessages(result);onChanged?.();onSent?.()}catch(e){alert(e.message)}}
 
   const mentionMatch=target?.is_group?text.match(/(^|\s)@([^\s@]*)$/):null;
   const mentionQuery=(mentionMatch?.[2]||"").toLowerCase();
@@ -1113,6 +1128,8 @@ function Chat({me,target,open,onChanged,onGroupActivated,onGroupSettingsChanged,
       {target.is_group&&!target.is_group_draft&&<button className="group-chat-info-trigger" title="Group information and settings" onClick={e=>{e.stopPropagation();setGroupInfoOpen(true)}}><Info size={21}/></button>}
       {!target.is_group&&<button className="group-chat-info-trigger" title="Conversation information and settings" onClick={e=>{e.stopPropagation();setDirectInfoOpen(true)}}><Info size={21}/></button>}
     </div>
+
+    {target.message_box&&<div className={`message-request-chat-notice ${target.message_box}`}><div><ShieldBan size={18}/><span><b>{target.message_box==="restricted"?"Restricted conversation":target.message_box==="spam"?"Spam message":"Message request"}</b><small>{target.message_box==="restricted"?"Messages stay outside Inbox. Reading does not send a Seen receipt.":"You can read these messages privately. A Seen receipt is not sent until you accept or reply."}</small></span></div><div>{target.message_box!=="restricted"&&<button className="primary" onClick={()=>onRequestAction?.("accept")}>Accept</button>}{target.message_box==="requests"&&<button className="secondary" onClick={()=>onRequestAction?.("spam")}>Spam</button>}{target.message_box==="spam"&&<button className="secondary" onClick={()=>onRequestAction?.("restore")}>Not spam</button>}{target.message_box==="restricted"&&<button className="secondary" onClick={()=>onRequestAction?.("unrestrict")}>Unrestrict</button>}</div></div>}
 
     <div className="messages" onScroll={()=>setReactionMenu(null)}>
       {messages.map(x=><div key={x.id} className={`bubble ${x.sender_id===Number(me.id)?"mine":""} attachment-bubble ${x.message_type==="text"&&isEmojiOnlyMessage(x.content)?"emoji-only-bubble":""}`}>
@@ -1494,7 +1511,7 @@ function RoutedApp(){
   const[timezone,setTimezone]=useState(()=>localStorage.getItem("socialn_timezone")||"auto");
   const[sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem("socialn_sidebar_collapsed")==="true"),[mobileSidebarOpen,setMobileSidebarOpen]=useState(false);
   const[notificationPrefs,setNotificationPrefs]=useNotificationPreferences(),[messageToasts,setMessageToasts]=useState([]),[activityToasts,setActivityToasts]=useState([]);
-  const[messageRequests,setMessageRequests]=useState([]),[showMessageRequests,setShowMessageRequests]=useState(false);
+  const[messageMailboxes,setMessageMailboxes]=useState({requests:[],spam:[],restricted:[]}),[messageFolder,setMessageFolder]=useState("inbox");
   const[feedMeta,setFeedMeta]=useState({nextCursor:null,hasMore:true,groups:[]}),[feedLoading,setFeedLoading]=useState(false);
   const searchTimerRef=useRef(null);
   const feedSentinelRef=useRef(null),feedLoadingRef=useRef(false);
@@ -1517,7 +1534,7 @@ function RoutedApp(){
   }
 
   async function loadFeed({reset=true}={}){if(feedLoadingRef.current)return;feedLoadingRef.current=true;setFeedLoading(true);try{const cursor=reset?null:feedMeta.nextCursor;if(!reset&&!cursor)return;const data=await api(`/api/posts/feed?limit=12${cursor?`&cursor=${encodeURIComponent(cursor)}`:""}`),rows=Array.isArray(data.items)?data.items:[];setFeed(current=>reset?rows:[...current,...rows.filter(row=>!current.some(item=>item.id===row.id))]);setFeedMeta({nextCursor:data.next_cursor||null,hasMore:Boolean(data.has_more),groups:data.suggested_groups||[]})}catch(e){console.error(e);if(reset)setFeed([])}finally{feedLoadingRef.current=false;setFeedLoading(false)}}
-  async function loadC(){try{const[rows,pending]=await Promise.all([queryCache.fetchQuery({queryKey:["conversations"],queryFn:()=>api("/api/chat/conversations"),staleTime:0}),api("/api/chat/message-requests")]);setConversations((Array.isArray(rows)?rows:[]).filter(c=>c?.is_group||c?.user?.id));setMessageRequests(Array.isArray(pending)?pending:[])}catch(e){console.error(e);setConversations([])}}
+  async function loadC(){try{const[rows,pending,spam,restricted]=await Promise.all([queryCache.fetchQuery({queryKey:["conversations"],queryFn:()=>api("/api/chat/conversations"),staleTime:0}),api("/api/chat/message-requests?folder=requests"),api("/api/chat/message-requests?folder=spam"),api("/api/chat/message-requests?folder=restricted")]);setConversations((Array.isArray(rows)?rows:[]).filter(c=>c?.is_group||c?.user?.id));setMessageMailboxes({requests:Array.isArray(pending)?pending:[],spam:Array.isArray(spam)?spam:[],restricted:Array.isArray(restricted)?restricted:[]})}catch(e){console.error(e);setConversations([]);setMessageMailboxes({requests:[],spam:[],restricted:[]})}}
   async function loadN({push=false}={}){try{const d=await queryCache.fetchQuery({queryKey:["notifications"],queryFn:()=>api("/api/notifications"),staleTime:0}),items=d.items||[],fresh=push&&notificationBaselineReadyRef.current?items.filter(item=>!item.is_read&&!knownNotificationIdsRef.current.has(item.id)&&!["new_message","group_mention"].includes(item.type)):[];items.forEach(item=>knownNotificationIdsRef.current.add(item.id));notificationBaselineReadyRef.current=true;setNotifs(items);setUnread(d.unread_count||0);fresh.slice().reverse().forEach(handleActivityNotification);return d}catch(e){console.error(e);return null}}
   async function loadMessageUnread(){try{const d=await api("/api/chat/unread-count");setMessageUnread(d.unread_count||0)}catch(e){console.error(e)}}
   async function refresh(){loadFeed();loadN();loadC();loadMessageUnread();try{const [f,r,sent,s]=await Promise.all([api("/api/friends"),api("/api/friends/requests"),api("/api/friends/requests/sent"),api("/api/users/suggestions/people")]);setFriends(f);setRequests(r);setSentRequests(sent);setSuggestions(s)}catch(e){console.error(e)}}
@@ -1534,6 +1551,24 @@ function RoutedApp(){
   function go(path,nextView){setRoute(path,nextView)}
   function message(u){setTarget(u);setRoute(`/messages/${encodeURIComponent(u.username)}`,"chat");loadC()}
   function openGroupChat(c){setTarget({...c,id:c.group_chat_id,is_group:true});setRoute(`/messages/group/${c.group_chat_id}`,"chat");loadC()}
+  function selectMessageFolder(folder){setMessageFolder(folder);setTarget(null);setRoute("/messages","chat")}
+  function openMailboxConversation(item,folder){setTarget({...item.user,message_box:folder,message_request_id:item.id});setRoute(`/messages/${encodeURIComponent(item.user.username)}`,"chat")}
+  async function messageMailboxAction(item,action){
+    try{
+      if(action==="delete"){
+        if(!await confirmDialog({title:"Delete message request?",message:`Permanently delete the conversation with ${item.user.name}?`,confirmLabel:"Delete"}))return;
+        await api(`/api/chat/message-requests/${item.id}`,{method:"DELETE"});
+      }else if(action==="unrestrict")await api(`/api/chat/restricted/${item.user.id}`,{method:"DELETE"});
+      else await api(`/api/chat/message-requests/${item.id}/${action}`,{method:"POST"});
+      if(Number(target?.id)===Number(item.user.id)){
+        if(action==="accept"){const{id,name,username,avatar_url}=item.user;setTarget({id,name,username,avatar_url});setMessageFolder("inbox")}
+        else setTarget(null);
+      }
+      if(action==="spam")setMessageFolder("spam");
+      if(action==="restore")setMessageFolder("requests");
+      await loadC();await loadMessageUnread();
+    }catch(e){setRouteError(e.message)}
+  }
 
   async function openMessageNotification(item){
     setMessageToasts(rows=>rows.filter(row=>row.toastId!==item.toastId));
@@ -1568,7 +1603,7 @@ function RoutedApp(){
   }
   function handleActivityNotification(notification){
     const prefs=notificationPrefsRef.current;if(!prefs.enabled)return;
-    const labels={friend_request:"FRIEND REQUEST",friend_accept:"NEW FRIEND",post_comment:"NEW COMMENT",post_reaction:"NEW REACTION",post_share:"POST SHARED",message_reaction:"MESSAGE REACTION",relationship_request:"RELATIONSHIP REQUEST",relationship_accepted:"RELATIONSHIP UPDATE",relationship_declined:"RELATIONSHIP UPDATE",group_welcome:"GROUP UPDATE"};
+    const labels={friend_request:"FRIEND REQUEST",friend_accept:"NEW FRIEND",post_comment:"NEW COMMENT",post_reaction:"NEW REACTION",post_share:"POST SHARED",message_request:"MESSAGE REQUEST",message_reaction:"MESSAGE REACTION",relationship_request:"RELATIONSHIP REQUEST",relationship_accepted:"RELATIONSHIP UPDATE",relationship_declined:"RELATIONSHIP UPDATE",group_welcome:"GROUP UPDATE"};
     const displayMessage=prefs.preview==="hidden"?"You have a new notification":prefs.preview==="sender"?"New activity on SocialN":notification.message;
     const item={...notification,notification,kind:"activity",categoryLabel:labels[notification.type]||"SOCIALN UPDATE",displayMessage,duration:Number(prefs.duration)||6000,toastId:`activity-${notification.id}`};
     if(prefs.sound)playMessageNotificationSound();
@@ -1609,7 +1644,7 @@ function RoutedApp(){
 
   function query(v){setSearch(v);clearTimeout(searchTimerRef.current);if(!v.trim()){setResults([]);return}searchTimerRef.current=setTimeout(async()=>{try{const data=await api(`/api/search?q=${encodeURIComponent(v.trim())}`),order=["people","posts","groups","pages","reels","events","marketplace"];setResults(order.flatMap(kind=>(data.results?.[kind]||[]).map(item=>({...item,_kind:kind}))))}catch{setResults([])}},350)}
   function openSearchResult(item){setResults([]);setSearch("");if(item._kind==="people")return openProfile(item.id);if(item._kind==="groups"){setGroupId(item.id);return go(`/groups/${item.id}`,"groups")}if(item._kind==="posts"){go("/","home");window.setTimeout(()=>document.getElementById(`post-${item.id}`)?.scrollIntoView({behavior:"smooth",block:"center"}),150);return}setRouteError(`${item._kind[0].toUpperCase()+item._kind.slice(1)} result: ${item.name||item.title||item.caption||"Open from its discovery API"}`)}
-  async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.entity_type==="group"&&n.entity_id){setGroupId(n.entity_id);go(`/groups/${n.entity_id}`,"groups")}else if(n.entity_type==="chat_group"&&n.entity_id){try{const d=await api(`/api/chat/group-conversations/${n.entity_id}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true});go(`/messages/group/${n.entity_id}`,"chat")}catch(e){setRouteError(e.message)}}else if(["new_message","message_reaction"].includes(n.type)&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.entity_type==="post"&&n.entity_id){go("/","home");await loadFeed();window.setTimeout(()=>document.getElementById(`post-${n.entity_id}`)?.scrollIntoView({behavior:"smooth",block:"center"}),120)}else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
+  async function read(n){if(!n.is_read)await api(`/api/notifications/${n.id}/read`,{method:"POST"});if(n.entity_type==="group"&&n.entity_id){setGroupId(n.entity_id);go(`/groups/${n.entity_id}`,"groups")}else if(n.entity_type==="chat_group"&&n.entity_id){try{const d=await api(`/api/chat/group-conversations/${n.entity_id}/messages`);setTarget({...d.group,id:d.group.id,group_chat_id:d.group.id,is_group:true});go(`/messages/group/${n.entity_id}`,"chat")}catch(e){setRouteError(e.message)}}else if(n.type==="message_request"&&n.actor){setMessageFolder("requests");setTarget({...n.actor,message_box:"requests",message_request_id:n.entity_id});go(`/messages/${encodeURIComponent(n.actor.username)}`,"chat");loadC()}else if(["new_message","message_reaction"].includes(n.type)&&n.actor)message(n.actor);else if(n.type==="friend_request")go("/friends","friends");else if(n.entity_type==="post"&&n.entity_id){go("/","home");await loadFeed();window.setTimeout(()=>document.getElementById(`post-${n.entity_id}`)?.scrollIntoView({behavior:"smooth",block:"center"}),120)}else if(n.actor)openProfile(n.actor.id);setDrop(false);loadN()}
   async function respondRelationship(n,action){try{await api(`/api/users/relationship-requests/${n.entity_id}/${action}`,{method:"POST"});await loadN();const updated=await api("/api/users/me");setUser(updated);if(view==="profile"&&Number(profile?.user?.id)===Number(user.id))await reloadProfile(user.id)}catch(e){alert(e.message)}}
   async function logout(){try{await api("/api/auth/logout",{method:"POST",authRetry:false})}catch{}authService.clear();queryCache.clear();navigate("/",{replace:true});setUser(null)}
   function toggleSidebar(){if(window.matchMedia("(max-width: 900px)").matches)setMobileSidebarOpen(value=>!value);else setSidebarCollapsed(value=>!value)}
@@ -1631,14 +1666,16 @@ function RoutedApp(){
         {view==="profile"&&profile&&<ProfilePage><Profile data={profile} me={user} reload={reloadProfile} message={message} open={openProfile}/></ProfilePage>}
         {view==="friends"&&<div className="friends-page"><div className="card friends-section"><div className="section-head"><h2>Friend requests</h2>{requests.length>0&&<span className="count-chip">{requests.length}</span>}</div>{requests.length===0&&<div className="muted">No pending requests.</div>}{requests.map(r=><div className="request-row" key={r.id}><Avatar user={r.user} onClick={()=>openProfile(r.user.id)}/><button className="name-block" onClick={()=>openProfile(r.user.id)}><b>{r.user.name}</b></button><button className="primary" onClick={async()=>{await api(`/api/friends/${r.id}/accept`,{method:"POST"});refresh()}}>Confirm</button><button className="secondary" onClick={async()=>{await api(`/api/friends/${r.id}/reject`,{method:"POST"});refresh()}}>Delete</button></div>)}</div><div className="card friends-section"><div className="section-head"><div><h2>Sent requests</h2><p className="muted small">Manage friend requests you have sent.</p></div>{sentRequests.length>0&&<span className="count-chip">{sentRequests.length}</span>}</div>{sentRequests.length===0?<div className="muted sent-empty">No sent requests.</div>:<div className="request-list">{sentRequests.map(r=><div className="request-row sent-request-row" key={r.id}><Avatar user={r.user} onClick={()=>openProfile(r.user.id)}/><button className="name-block" onClick={()=>openProfile(r.user.id)}><b>{r.user.name}</b><small className="muted">Sent {formatDateTime(r.created_at)}</small></button><button className="secondary cancel-request" onClick={async()=>{if(await confirmDialog({variant:"confirm",title:"Cancel friend request?",message:`Withdraw the friend request sent to ${r.user.name}?`,confirmLabel:"Withdraw",cancelLabel:"Keep request"})){await api(`/api/friends/requests/${r.id}`,{method:"DELETE"});refresh()}}}>Withdraw</button></div>)}</div>}</div><div className="card friends-section"><h2>Your friends</h2><div className="people-grid">{friends.map(u=><div className="person" key={u.id}><Avatar user={u} onClick={()=>openProfile(u.id)}/><button className="name-link" onClick={()=>openProfile(u.id)}>{u.name}</button><button className="secondary" onClick={()=>message(u)}>Message</button></div>)}</div></div><div className="card friends-section"><h2>People you may know</h2><div className="people-grid">{suggestions.map(u=><div className="person" key={u.id}><Avatar user={u} onClick={()=>openProfile(u.id)}/><button className="name-link" onClick={()=>openProfile(u.id)}>{u.name}</button><small>{u.mutual_friends_count} mutual friends</small><button className="primary" onClick={async()=>{await api(`/api/friends/${u.id}`,{method:"POST"});refresh()}}>Add friend</button></div>)}</div></div></div>}
         {view==="chat"&&<MessagesPage hasSelection={Boolean(target)}><div className="conversation-list card"><div className="conversation-title"><span>Messages</span><button className="compose-message" title="Compose message" onClick={()=>setNewGroupChatOpen(true)}><Edit2 size={19}/></button></div>
-          {messageRequests.length>0&&<><button className="message-requests-toggle" onClick={()=>setShowMessageRequests(value=>!value)}><span>Message requests</span><b>{messageRequests.length}</b></button>{showMessageRequests&&<div className="message-request-list">{messageRequests.map(request=><div className="message-request-row" key={request.id}><button onClick={()=>message(request.user)}><Avatar user={request.user}/><span><b>{request.user.name}</b><small>{request.last_message}</small></span></button><div><button className="primary" onClick={async()=>{await api(`/api/chat/message-requests/${request.id}/accept`,{method:"POST"});await loadC()}}>Accept</button><button className="secondary" onClick={async()=>{await api(`/api/chat/message-requests/${request.id}/spam`,{method:"POST"});await loadC()}}>Spam</button></div></div>)}</div>}</>}
-          {conversations.filter(c=>!c.is_group&&Number(c.user.id)===Number(user.id)).map(c=><ConversationRow key={c.id} conversation={c} personalStorage active={!target?.is_group&&Number(target?.id)===Number(user.id)} onOpen={()=>message(user)} onChanged={loadC} onDeleted={()=>{setTarget(null);setRoute("/messages","chat")}}/>)}
-          {!conversations.some(c=>!c.is_group&&Number(c.user.id)===Number(user.id))&&<button className="self-vault" onClick={()=>message(user)}><Avatar user={user}/><span><b>{user.name} (You)</b><small>Personal storage</small></span></button>}
-          {draftGroupChat&&<ConversationRow conversation={draftGroupChat} active={target?.is_group_draft} onOpen={()=>{setTarget(draftGroupChat);setRoute("/messages/new-group","chat")}}/>}
-          {conversations.filter(c=>c.is_group||Number(c.user?.id)!==Number(user.id)).map(c=>c.is_group
-            ?<ConversationRow key={`group-${c.group_chat_id}`} conversation={c} active={target?.is_group&&Number(target?.group_chat_id)===Number(c.group_chat_id)} onOpen={()=>openGroupChat(c)} onChanged={loadC}/>
-            :<ConversationRow key={c.id} conversation={c} active={!target?.is_group&&Number(target?.id)===Number(c.user.id)} onOpen={()=>message(c.user)} onChanged={loadC} onDeleted={row=>{if(Number(target?.id)===Number(row.user.id)){setTarget(null);setRoute("/messages","chat")}}}/>)}
-        </div><Chat me={user} target={target} open={openProfile} onMobileBack={()=>{setTarget(null);setRoute("/messages","chat")}} onChanged={()=>{loadC();loadMessageUnread()}} onGroupActivated={group=>{setDraftGroupChat(null);setTarget({...group,is_group:true});setRoute(`/messages/group/${group.group_chat_id}`,"chat");loadC()}}/>{newGroupChatOpen&&<NewGroupChatModal friends={friends} onClose={()=>setNewGroupChatOpen(false)} onCreate={draft=>{const item={...draft,id:"draft",group_chat_id:"draft",last_message:"Draft · Send a message to create",last_message_type:"text"};setDraftGroupChat(item);setTarget(item);setNewGroupChatOpen(false);setRoute("/messages/new-group","chat")}}/>}</MessagesPage>}
+          <div className="message-folder-tabs" role="tablist" aria-label="Message folders"><button role="tab" aria-selected={messageFolder==="inbox"} className={messageFolder==="inbox"?"active":""} onClick={()=>selectMessageFolder("inbox")}><MessageCircle size={15}/><span>Inbox</span></button><button role="tab" aria-selected={messageFolder==="requests"} className={messageFolder==="requests"?"active":""} onClick={()=>selectMessageFolder("requests")}><UserPlus size={15}/><span>Requests</span>{messageMailboxes.requests.length>0&&<b>{messageMailboxes.requests.length}</b>}</button><button role="tab" aria-selected={messageFolder==="spam"} className={messageFolder==="spam"?"active":""} onClick={()=>selectMessageFolder("spam")}><ShieldBan size={15}/><span>Spam / Restricted</span>{messageMailboxes.spam.length+messageMailboxes.restricted.length>0&&<b>{messageMailboxes.spam.length+messageMailboxes.restricted.length}</b>}</button></div>
+          {messageFolder==="inbox"&&<>{conversations.filter(c=>!c.is_group&&Number(c.user.id)===Number(user.id)).map(c=><ConversationRow key={c.id} conversation={c} personalStorage active={!target?.is_group&&Number(target?.id)===Number(user.id)} onOpen={()=>message(user)} onChanged={loadC} onDeleted={()=>{setTarget(null);setRoute("/messages","chat")}}/>)}
+            {!conversations.some(c=>!c.is_group&&Number(c.user.id)===Number(user.id))&&<button className="self-vault" onClick={()=>message(user)}><Avatar user={user}/><span><b>{user.name} (You)</b><small>Personal storage</small></span></button>}
+            {draftGroupChat&&<ConversationRow conversation={draftGroupChat} active={target?.is_group_draft} onOpen={()=>{setTarget(draftGroupChat);setRoute("/messages/new-group","chat")}}/>}
+            {conversations.filter(c=>c.is_group||Number(c.user?.id)!==Number(user.id)).map(c=>c.is_group
+              ?<ConversationRow key={`group-${c.group_chat_id}`} conversation={c} active={target?.is_group&&Number(target?.group_chat_id)===Number(c.group_chat_id)} onOpen={()=>openGroupChat(c)} onChanged={loadC}/>
+              :<ConversationRow key={c.id} conversation={c} active={!target?.is_group&&Number(target?.id)===Number(c.user.id)} onOpen={()=>message(c.user)} onChanged={loadC} onDeleted={row=>{if(Number(target?.id)===Number(row.user.id)){setTarget(null);setRoute("/messages","chat")}}}/>)}</>}
+          {messageFolder==="requests"&&<div className="message-mailbox-list"><div className="message-folder-explainer"><b>Message Requests</b><small>Messages from people you are not connected with. They cannot see when you read them until you accept or reply.</small></div>{messageMailboxes.requests.length===0?<div className="message-folder-empty">No message requests.</div>:messageMailboxes.requests.map(item=><MessageMailboxRow key={item.id} item={item} folder="requests" active={Number(target?.message_request_id)===Number(item.id)} onOpen={()=>openMailboxConversation(item,"requests")} onAction={action=>messageMailboxAction(item,action)}/>)}</div>}
+          {messageFolder==="spam"&&<div className="message-mailbox-list"><div className="message-folder-explainer"><b>Spam &amp; Restricted</b><small>These conversations stay outside Inbox and do not generate normal message notifications.</small></div>{messageMailboxes.spam.length===0&&messageMailboxes.restricted.length===0?<div className="message-folder-empty">No spam or restricted conversations.</div>:<>{messageMailboxes.spam.length>0&&<div className="message-folder-label">Spam</div>}{messageMailboxes.spam.map(item=><MessageMailboxRow key={`spam-${item.id}`} item={item} folder="spam" active={Number(target?.message_request_id)===Number(item.id)} onOpen={()=>openMailboxConversation(item,"spam")} onAction={action=>messageMailboxAction(item,action)}/>)}{messageMailboxes.restricted.length>0&&<div className="message-folder-label">Restricted</div>}{messageMailboxes.restricted.map(item=><MessageMailboxRow key={`restricted-${item.id}`} item={item} folder="restricted" active={Number(target?.message_request_id)===Number(item.id)} onOpen={()=>openMailboxConversation(item,"restricted")} onAction={action=>messageMailboxAction(item,action)}/>)}</>}</div>}
+        </div><Chat me={user} target={target} open={openProfile} onMobileBack={()=>{setTarget(null);setRoute("/messages","chat")}} onChanged={()=>{loadC();loadMessageUnread()}} onSent={()=>{if(["requests","spam"].includes(target?.message_box)){setTarget(current=>current?{...current,message_box:null,message_request_id:null}:current);setMessageFolder("inbox");loadC()}}} onRequestAction={action=>target?.message_request_id&&messageMailboxAction({id:target.message_request_id,user:target},action)} onGroupActivated={group=>{setDraftGroupChat(null);setTarget({...group,is_group:true});setRoute(`/messages/group/${group.group_chat_id}`,"chat");loadC()}}/>{newGroupChatOpen&&<NewGroupChatModal friends={friends} onClose={()=>setNewGroupChatOpen(false)} onCreate={draft=>{const item={...draft,id:"draft",group_chat_id:"draft",last_message:"Draft · Send a message to create",last_message_type:"text"};setDraftGroupChat(item);setTarget(item);setNewGroupChatOpen(false);setRoute("/messages/new-group","chat")}}/>}</MessagesPage>}
         {view==="notifications"&&<div className="card notifications-page">{notifs.map(n=><button className="notification-row" key={n.id} onClick={()=>read(n)}>{n.message}</button>)}</div>}
         {view==="activity"&&<ActivityLogPage openProfile={openProfile}/>} 
         {view==="groups"&&<GroupsModule><GroupsPage groupId={groupId} onOpen={id=>{setGroupId(id);go(`/groups/${id}`,"groups")}}/></GroupsModule>}
