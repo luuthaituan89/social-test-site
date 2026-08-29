@@ -214,6 +214,9 @@ docker compose down -v
 | `STORAGE_BACKEND` | `local` hoặc `s3` |
 | `S3_*`, `CDN_BASE_URL` | Object storage và public/CDN URL |
 | `SENTRY_DSN` | Error tracking tùy chọn |
+| `RATE_LIMIT_PER_MINUTE`, `AUTH_RATE_LIMIT_PER_MINUTE` | Giới hạn API chung và các endpoint xác thực nhạy cảm |
+| `UPLOAD_RATE_LIMIT_PER_MINUTE`, `SEARCH_RATE_LIMIT_PER_MINUTE` | Giới hạn upload và tìm kiếm theo phút |
+| `MAX_IMAGE_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB`, `MAX_FILE_UPLOAD_MB` | Giới hạn dung lượng theo loại media |
 | `VITE_API_URL` | Base URL của API mà frontend gọi |
 
 Không commit `.env` hoặc API key. Chỉ commit `.env.example` với giá trị mẫu.
@@ -258,8 +261,9 @@ VITE_API_URL=http://localhost:8000 npm run dev
 ### Lưu ý production
 
 - Schema chỉ được cập nhật bằng Alembic; container backend chạy `alembic upgrade head` trước Uvicorn.
-- Rate limiting hiện dùng Redis nhưng production vẫn nên có HTTPS/reverse proxy, refresh token, xác minh email và quản lý session.
-- Media đã hỗ trợ object storage/thumbnail/CDN; production nên bổ sung quét virus, kiểm duyệt nội dung và pipeline video chuyên dụng.
+- Rate limiting dùng các bucket riêng cho xác thực, upload, tìm kiếm và API chung; production vẫn cần HTTPS/reverse proxy và giới hạn tương ứng ở proxy.
+- Upload kiểm tra phần mở rộng, kích thước, MIME do máy chủ xác định và chữ ký file trước khi ghi vào storage. Production vẫn nên bổ sung quét virus, kiểm duyệt nội dung và pipeline video chuyên dụng.
+- Khi `ENVIRONMENT=production`, backend từ chối khởi động nếu JWT/TOTP key yếu hoặc cookie xác thực chưa bật chế độ secure.
 - File chat 2 GB cần cấu hình đồng bộ giới hạn body/timeout ở proxy và hạ tầng.
 - Khi chạy nhiều backend instance, dùng Redis/pub-sub cho WebSocket và presence.
 - Giới hạn/ràng buộc sử dụng GIPHY phụ thuộc tài khoản và điều khoản GIPHY của bạn.
@@ -460,6 +464,9 @@ docker compose down -v
 | `STORAGE_BACKEND` | `local` or `s3` |
 | `S3_*`, `CDN_BASE_URL` | Object storage and public/CDN URLs |
 | `SENTRY_DSN` | Optional error tracking |
+| `RATE_LIMIT_PER_MINUTE`, `AUTH_RATE_LIMIT_PER_MINUTE` | General API and sensitive authentication limits |
+| `UPLOAD_RATE_LIMIT_PER_MINUTE`, `SEARCH_RATE_LIMIT_PER_MINUTE` | Per-minute upload and search limits |
+| `MAX_IMAGE_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB`, `MAX_FILE_UPLOAD_MB` | Media size limits by category |
 | `ACCOUNT_DELETION_GRACE_DAYS` | Recovery window before permanent account deletion; default `30` days |
 | `BACKUP_RETENTION_DAYS` | Maximum documented retention for encrypted backups; default `30` days |
 | `VITE_API_URL` | API base URL used by the frontend |
@@ -506,9 +513,9 @@ VITE_API_URL=http://localhost:8000 npm run dev
 ### Production notes
 
 - Schema changes now run only through Alembic; the backend container applies `alembic upgrade head` before Uvicorn.
-- Redis rate limiting is included; production should still add HTTPS/reverse proxying, refresh tokens, email verification, and session management.
-- Object storage, thumbnails and CDN URLs are supported; add virus scanning, content moderation and a dedicated video pipeline for production.
-- Move media to object storage and add malware/content scanning.
+- Authentication, upload, search and general API traffic use separate rate-limit buckets; production still needs HTTPS/reverse proxy limits.
+- Uploads validate extension, size, server-detected MIME and file signature before storage. Add malware scanning, content moderation and a dedicated video pipeline for production.
+- With `ENVIRONMENT=production`, the backend refuses to start with weak JWT/TOTP keys or insecure authentication cookies.
 - A 2 GB chat upload requires matching body-size and timeout settings across the proxy and infrastructure.
 - Use Redis/pub-sub for WebSocket delivery and presence when scaling to multiple backend instances.
 - GIPHY usage limits and requirements depend on your GIPHY account and terms.

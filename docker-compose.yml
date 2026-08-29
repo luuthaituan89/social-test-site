@@ -9,7 +9,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-socialn}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-socialn}
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -40,8 +40,8 @@ services:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-socialn}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-socialn-development}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
 
@@ -98,6 +98,13 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       ACCOUNT_DELETION_GRACE_DAYS: ${ACCOUNT_DELETION_GRACE_DAYS:-30}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-180}
+      AUTH_RATE_LIMIT_PER_MINUTE: ${AUTH_RATE_LIMIT_PER_MINUTE:-20}
+      UPLOAD_RATE_LIMIT_PER_MINUTE: ${UPLOAD_RATE_LIMIT_PER_MINUTE:-30}
+      SEARCH_RATE_LIMIT_PER_MINUTE: ${SEARCH_RATE_LIMIT_PER_MINUTE:-90}
+      MAX_IMAGE_UPLOAD_MB: ${MAX_IMAGE_UPLOAD_MB:-100}
+      MAX_VIDEO_UPLOAD_MB: ${MAX_VIDEO_UPLOAD_MB:-2048}
+      MAX_FILE_UPLOAD_MB: ${MAX_FILE_UPLOAD_MB:-2048}
     depends_on:
       db:
         condition: service_healthy

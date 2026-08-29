@@ -5,6 +5,7 @@ Revises: 0004_account_security
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision = "0005_smart_feed"
 down_revision = "0004_account_security"
@@ -13,6 +14,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if inspect(op.get_bind()).has_table("feed_author_preferences"):
+        return
     op.create_table("feed_author_preferences",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),

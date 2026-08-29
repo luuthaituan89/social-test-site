@@ -7,6 +7,24 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: socialn_ci
+          MYSQL_USER: socialn
+          MYSQL_PASSWORD: socialn
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql+pymysql://socialn:socialn@127.0.0.1:3306/socialn_ci
+      JWT_SECRET: ci-only-secret-value-that-is-long-enough
     defaults:
       run:
         working-directory: backend
@@ -19,6 +37,8 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
       - run: python -m compileall -q app
+      - run: alembic upgrade head
+      - run: alembic check
       - run: pytest
 
   frontend:

@@ -5,6 +5,7 @@ Revises: 0001_socialn_baseline
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision = "0002_advanced_privacy"
 down_revision = "0001_socialn_baseline"
@@ -15,6 +16,9 @@ AUDIENCES = "'public','friends','friends_except','specific_friends','followers',
 
 
 def upgrade() -> None:
+    schema = inspect(op.get_bind())
+    if "privacy_settings" in {column["name"] for column in schema.get_columns("users")} and schema.has_table("follows"):
+        return
     op.add_column("users", sa.Column("privacy_settings", sa.Text(), nullable=True))
     op.add_column("posts", sa.Column("audience_config", sa.Text(), nullable=True))
     op.add_column("albums", sa.Column("audience_config", sa.Text(), nullable=True))

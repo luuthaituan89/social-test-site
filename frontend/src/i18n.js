@@ -51,26 +51,22 @@ const friendSearchLabels={en:"Search your friends to tag...",vi:"Tìm trong danh
 for(const [locale,label] of Object.entries(friendSearchLabels))dictionaries[locale]["Search for a person to tag..."]=label;
 const groupWelcomeLabels={en:"Welcome to {name}",vi:"Chào mừng bạn đến với nhóm {name}",ko:"{name} 그룹에 오신 것을 환영합니다",ja:"{name}グループへようこそ",zh:"欢迎加入{name}小组",th:"ยินดีต้อนรับสู่กลุ่ม {name}"};
 for(const [locale,label] of Object.entries(groupWelcomeLabels))dictionaries[locale]["Welcome to {name}"]=label;
-let current="en",observer=null,applying=false;
-const textState=new WeakMap(),attrState=new WeakMap();
-const ignored=".post-content,.comment-body,.bubble,.profile-bio,.shared-content,.album-card small,.album-modal-title p";
-function translated(value){
-  const trimmed=value.trim(),hit=dictionaries[current]?.[trimmed];
-  if(hit)return value.replace(trimmed,hit);
-  if(trimmed.startsWith("Sent "))return value.replace(trimmed,`${dictionaries[current]?.Sent||"Sent"} ${trimmed.slice(5)}`);
-  const withdraw=trimmed.match(/^Withdraw the friend request sent to (.+)\?$/);
-  if(withdraw)return value.replace(trimmed,translate("Withdraw the friend request sent to {name}?",{name:withdraw[1]}));
-  if(trimmed.startsWith("Welcome to "))return value.replace(trimmed,translate("Welcome to {name}",{name:trimmed.slice(11)}));
-  for(const template of ["{name} wants to add you to their relationship status","{name} accepted your relationship request","{name} declined your relationship request"]){const suffix=template.replace("{name}","");if(trimmed.endsWith(suffix))return value.replace(trimmed,translate(template,{name:trimmed.slice(0,-suffix.length)}))}
+let current="en";
+
+export function normalizeLanguage(locale){return dictionaries[locale]?locale:"en"}
+export function translate(key,params={},locale=current){
+  let value=dictionaries[normalizeLanguage(locale)]?.[key]||dictionaries.en?.[key]||key;
+  for(const [name,replacement] of Object.entries(params))value=value.replaceAll(`{${name}}`,String(replacement));
   return value;
 }
-export function translate(key,params={}){let value=dictionaries[current]?.[key]||key;for(const [name,replacement] of Object.entries(params))value=value.replaceAll(`{${name}}`,replacement);return value}
-function scan(root=document.body){
-  if(!root)return;applying=true;
-  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
-  while((node=walker.nextNode())){if(!node.nodeValue.trim()||node.parentElement?.closest(ignored))continue;let state=textState.get(node);if(!state||node.nodeValue!==state.rendered)state={source:node.nodeValue,rendered:node.nodeValue};const next=translated(state.source);state.rendered=next;textState.set(node,state);if(node.nodeValue!==next)node.nodeValue=next}
-  const elements=[...(root.nodeType===1?[root]:[]),...(root.querySelectorAll?.("[placeholder],[title],[aria-label]")||[])];
-  for(const el of elements){let states=attrState.get(el)||{};for(const attr of ["placeholder","title","aria-label"]){if(!el.hasAttribute?.(attr))continue;const value=el.getAttribute(attr),old=states[attr];if(!old||value!==old.rendered)states[attr]={source:value,rendered:value};const next=translated(states[attr].source);states[attr].rendered=next;if(value!==next)el.setAttribute(attr,next)}attrState.set(el,states)}
-  applying=false;
+export function setSiteLanguage(locale){
+  current=normalizeLanguage(locale);
+  if(typeof document!=="undefined")document.documentElement.lang=current;
+  if(typeof localStorage!=="undefined")localStorage.setItem("socialn_language",current);
+  return current;
 }
-export function setSiteLanguage(locale){current=dictionaries[locale]?locale:"en";document.documentElement.lang=current;localStorage.setItem("socialn_language",current);scan();if(!observer){observer=new MutationObserver(mutations=>{if(applying)return;for(const mutation of mutations)scan(mutation.type==="characterData"?mutation.target.parentElement:mutation.target)});observer.observe(document.body,{subtree:true,childList:true,characterData:true})}}
+export function getSiteLanguage(){return current}
+export function missingTranslations(locale){
+  const normalized=normalizeLanguage(locale),base=dictionaries.en||{},candidate=dictionaries[normalized]||{};
+  return Object.keys(base).filter(key=>!Object.prototype.hasOwnProperty.call(candidate,key)||candidate[key]==="");
+}

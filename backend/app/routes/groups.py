@@ -11,6 +11,7 @@ from ..models import Group, GroupBan, GroupJoinRequest, GroupMember, GroupPost, 
 from ..schemas import GroupCommentCreate, GroupCoverUpdate, GroupCreate, GroupJoinIn, GroupPostCreate, GroupReportCreate, GroupUpdate, ReactionIn
 from ..activity import log_activity
 from ..notifications import create_notification
+from ..services.storage import is_managed_media_url
 from .notifications import notification_ws
 
 router = APIRouter(prefix="/api/groups", tags=["Groups"])
@@ -244,7 +245,7 @@ def update_group_cover(group_id: int, data: GroupCoverUpdate, db: Session = Depe
     actor=membership(db,group_id,user.id);group=db.get(Group,group_id)
     if not group: raise HTTPException(404,"Group not found")
     if not actor or actor.role!="admin": raise HTTPException(403,"Admin access required")
-    if not data.cover_url.startswith("/uploads/"): raise HTTPException(400,"Invalid uploaded cover URL")
+    if not is_managed_media_url(data.cover_url): raise HTTPException(400,"Invalid uploaded cover URL")
     group.cover_url=data.cover_url;db.commit();db.refresh(group)
     log_activity(db,user.id,"groups","group_cover_updated",f"Updated the cover photo for {group.name}",entity_type="group",entity_id=group.id)
     db.commit()

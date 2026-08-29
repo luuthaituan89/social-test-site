@@ -1,0 +1,1 @@
+.feed-list>.card,.messages>.bubble,.album-grid>*{content-visibility:auto;contain-intrinsic-size:1px 280px}.history-window-notice{position:sticky;top:8px;z-index:2;display:flex;justify-content:center}.history-window-notice button{box-shadow:0 4px 18px #0005}.media-loading-placeholder{min-height:180px;background:var(--soft,#151a21)}

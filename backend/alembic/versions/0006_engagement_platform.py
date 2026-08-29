@@ -5,6 +5,7 @@ Revises: 0005_smart_feed
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision = "0006_engagement_platform"
 down_revision = "0005_smart_feed"
@@ -13,6 +14,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    schema = inspect(op.get_bind())
+    conversation_columns = {column["name"] for column in schema.get_columns("conversations")}
+    if "request_status" in conversation_columns and schema.has_table("stories") and schema.has_table("push_subscriptions"):
+        return
     op.add_column("conversations", sa.Column("request_recipient_id", sa.Integer(), nullable=True))
     op.add_column("conversations", sa.Column("request_status", sa.String(20), nullable=False, server_default="accepted"))
     op.add_column("conversations", sa.Column("request_updated_at", sa.DateTime(), nullable=True))

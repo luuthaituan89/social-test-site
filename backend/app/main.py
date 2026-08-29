@@ -5,17 +5,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .config import settings
+from .config import settings, validate_runtime_settings
 from .routes import (auth, users, friends, posts, chat, upload, notifications, albums,
                      giphy, activity, groups, data_lifecycle, products, search)
 from .services.cache import healthy as redis_healthy
 from .services.observability import RequestContextMiddleware, configure_observability
 from .services.rate_limit import RateLimitMiddleware
+from .services.security_headers import SecurityHeadersMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Schema changes are performed by `alembic upgrade head` before Uvicorn.
+    validate_runtime_settings()
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     yield
 
@@ -36,6 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestContextMiddleware)
 
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")

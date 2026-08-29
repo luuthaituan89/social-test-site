@@ -48,6 +48,15 @@ def storage():
     return S3Storage() if settings.storage_backend.lower() == "s3" else LocalStorage()
 
 
+def is_managed_media_url(url: str | None) -> bool:
+    if not url:
+        return False
+    if url.startswith("/uploads/"):
+        return True
+    return any(bool(base) and url.startswith(base.rstrip("/") + "/")
+               for base in (settings.s3_public_url, settings.cdn_base_url))
+
+
 def delete_media_url(url: str | None) -> bool:
     if not url:
         return False

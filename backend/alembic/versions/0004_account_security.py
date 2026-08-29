@@ -5,6 +5,7 @@ Revises: 0003_user_data_lifecycle
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision = "0004_account_security"
 down_revision = "0003_user_data_lifecycle"
@@ -13,6 +14,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if inspect(op.get_bind()).has_table("auth_sessions"):
+        return
     op.add_column("users", sa.Column("email_verified_at", sa.DateTime(), nullable=True))
     op.add_column("users", sa.Column("auth_version", sa.Integer(), nullable=False, server_default="1"))
     op.add_column("users", sa.Column("totp_enabled", sa.Boolean(), nullable=False, server_default=sa.false()))

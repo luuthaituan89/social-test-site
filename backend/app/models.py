@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from sqlalchemy import (
-    String, Text, DateTime, Date, ForeignKey, Enum, UniqueConstraint, Boolean, BigInteger, Float
+    String, Text, DateTime, Date, ForeignKey, Enum, UniqueConstraint, Boolean, BigInteger, Float, Index
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
@@ -182,6 +182,7 @@ class Block(Base):
 
 class Post(Base):
     __tablename__ = "posts"
+    __table_args__ = (Index("ix_posts_author_created", "author_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -204,6 +205,7 @@ class Like(Base):
     __tablename__ = "likes"
     __table_args__ = (
         UniqueConstraint("user_id", "post_id", name="uq_like"),
+        Index("ix_likes_post_created", "post_id", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -217,6 +219,7 @@ class Like(Base):
 
 class Comment(Base):
     __tablename__ = "comments"
+    __table_args__ = (Index("ix_comments_post_created", "post_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     post_id: Mapped[int] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), index=True)
@@ -230,6 +233,7 @@ class Comment(Base):
 
 class Conversation(Base):
     __tablename__ = "conversations"
+    __table_args__ = (Index("ix_conversations_request_inbox", "request_recipient_id", "request_status", "request_updated_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     direct_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
@@ -327,6 +331,7 @@ class ChatPollVote(Base):
 
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (Index("ix_messages_conversation_id_desc", "conversation_id", "id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
@@ -364,6 +369,7 @@ class MessageReaction(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (Index("ix_notifications_user_unread_created", "user_id", "is_read", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -418,6 +424,7 @@ class AlbumMedia(Base):
 
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
+    __table_args__ = (Index("ix_activity_logs_user_created", "user_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -490,6 +497,7 @@ class GroupBan(Base):
 
 class GroupPost(Base):
     __tablename__ = "group_posts"
+    __table_args__ = (Index("ix_group_posts_group_status_created", "group_id", "status", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
@@ -602,10 +610,11 @@ class Reel(Base):
 
 class SocialPage(Base):
     __tablename__ = "social_pages"
+    __table_args__ = (UniqueConstraint("slug", name="uq_social_page_slug"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(150), index=True)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String(100), index=True)
     category: Mapped[str] = mapped_column(String(80), default="community", index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -679,9 +688,10 @@ class NotificationPreference(Base):
 
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
+    __table_args__ = (UniqueConstraint("endpoint_hash", name="uq_push_endpoint_hash"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    endpoint_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    endpoint_hash: Mapped[str] = mapped_column(String(64), index=True)
     endpoint: Mapped[str] = mapped_column(Text)
     p256dh: Mapped[str] = mapped_column(String(255))
     auth: Mapped[str] = mapped_column(String(255))

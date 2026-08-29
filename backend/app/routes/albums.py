@@ -1,17 +1,16 @@
-from pathlib import Path
-import uuid
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
-from ..config import settings
 from ..database import get_db
 from ..models import Album, AlbumMedia, Post, Privacy, User
 from ..schemas import AlbumCreate
 from ..utils import is_blocked_either_way, friend_ids, has_restricted
 from ..services.privacy import (can_view_audience, can_view_profile_field,
                                 decode_config, encode_audience_config)
+from ..services.storage import delete_media_url
+from ..services.uploads import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, MIB, save_validated_upload
+from ..config import settings
 
 router = APIRouter(prefix="/api/albums", tags=["Albums"])
 
@@ -209,35 +208,26 @@ def delete_album(album_id: int, db: Session = Depends(get_db), user: User = Depe
     db.delete(album)
     db.commit()
     for media_url in media_urls:
-        if media_url.startswith("/uploads/album_"):
-            (Path(settings.upload_dir) / Path(media_url).name).unlink(missing_ok=True)
+        delete_media_url(media_url)
     return {"message": "Album and all linked media were deleted"}
 
 
 @router.post("/{album_id}/media")
-async def upload_album_media(album_id: int, file: UploadFile = File(...), caption: str = Form(""),
-                             db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def upload_album_media(album_id: int, file: UploadFile = File(...), caption: str = Form(""),
+                       db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     album = db.get(Album, album_id)
     if not album or album.owner_id != user.id:
         raise HTTPException(404, "Album not found")
     if album.kind is not None:
         raise HTTPException(400, "Photos can only be added to custom albums")
-    suffix = Path(file.filename or "media").suffix.lower()
-    image_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-    video_ext = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
-    if suffix not in image_ext | video_ext:
-        raise HTTPException(400, "Only image and video files are allowed")
-    filename = f"album_{uuid.uuid4().hex}{suffix}"
-    target = Path(settings.upload_dir) / filename
-    try:
-        with target.open("wb") as output:
-            while chunk := await file.read(1024 * 1024):
-                output.write(chunk)
-    except Exception:
-        target.unlink(missing_ok=True)
-        raise
-    row = AlbumMedia(album_id=album.id, media_url=f"/uploads/{filename}",
-                     media_type="video" if suffix in video_ext else "image", caption=caption.strip()[:500] or None,
+    media_url, inspection, _ = save_validated_upload(
+        file, prefix=f"albums/{user.id}/{album.id}", allowed=IMAGE_EXTENSIONS | VIDEO_EXTENSIONS,
+        max_bytes=settings.max_video_upload_mb * MIB,
+        category_limits={"image": settings.max_image_upload_mb * MIB,
+                         "video": settings.max_video_upload_mb * MIB},
+    )
+    row = AlbumMedia(album_id=album.id, media_url=media_url,
+                     media_type=inspection.category, caption=caption.strip()[:500] or None,
                      privacy=album.privacy)
     db.add(row)
     db.flush()
@@ -278,6 +268,6 @@ def delete_album_media(album_id: int, media_id: int, db: Session = Depends(get_d
             ).delete(synchronize_session=False)
         db.delete(media)
     db.commit()
-    if album.kind is None and media_url.startswith("/uploads/album_"):
-        (Path(settings.upload_dir) / Path(media_url).name).unlink(missing_ok=True)
+    if album.kind is None:
+        delete_media_url(media_url)
     return {"message": "Media deleted"}

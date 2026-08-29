@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from sqlalchemy.exc import IntegrityError
 from jose import jwt, JWTError
-from pathlib import Path
 import uuid
 import json
 import re
@@ -23,6 +22,7 @@ from ..notifications import create_notification
 from ..utils import are_friends, has_restricted
 from .notifications import notification_ws
 from ..services.realtime import DistributedSocketManager, user_is_online
+from ..services.uploads import CHAT_EXTENSIONS, MIB, save_validated_upload
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 REACTIONS = {"like": "👍", "love": "❤️", "haha": "😂", "wow": "😮", "sad": "😢", "angry": "😡"}
@@ -486,36 +486,16 @@ def set_group_chat_role(group_id: int, member_id: int, role: str, db: Session = 
 
 
 @router.post("/upload")
-async def upload_chat_file(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+def upload_chat_file(file: UploadFile = File(...), user: User = Depends(get_current_user)):
     del user
-    suffix = Path(file.filename or "file").suffix.lower()
-    allowed = {
-        ".jpg", ".jpeg", ".png", ".webp", ".gif",
-        ".mp3", ".wav", ".ogg", ".webm", ".m4a",
-        ".mp4", ".mov", ".m4v", ".avi", ".mkv",
-        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-        ".txt", ".csv", ".zip", ".rar",
-    }
-    if suffix not in allowed:
-        raise HTTPException(400, "This file type is not allowed")
-    filename = f"chat_{uuid.uuid4().hex}{suffix}"
-    target = Path(settings.upload_dir) / filename
-    target.parent.mkdir(parents=True, exist_ok=True)
-    max_size = 2048 * 1024 * 1024
-    total = 0
-    try:
-        with target.open("wb") as output:
-            while chunk := await file.read(1024 * 1024):
-                total += len(chunk)
-                if total > max_size:
-                    raise HTTPException(413, "File must be 2048 MB or smaller")
-                output.write(chunk)
-    except Exception:
-        target.unlink(missing_ok=True)
-        raise
-    mime = file.content_type or "application/octet-stream"
-    kind = "image" if mime.startswith("image/") else "video" if mime.startswith("video/") else "voice" if mime.startswith("audio/") else "file"
-    return {"url": f"/uploads/{filename}", "name": file.filename or filename, "mime": mime, "message_type": kind}
+    url, inspection, key = save_validated_upload(
+        file, prefix="chat", allowed=CHAT_EXTENSIONS,
+        max_bytes=settings.max_file_upload_mb * MIB,
+        category_limits={"image": settings.max_image_upload_mb * MIB,
+                         "video": settings.max_video_upload_mb * MIB},
+    )
+    return {"url": url, "name": file.filename or key, "mime": inspection.mime,
+            "size": inspection.size, "message_type": inspection.category}
 
 
 @router.get("/conversations")

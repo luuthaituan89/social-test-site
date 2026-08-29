@@ -1,9 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
-from pathlib import Path
-import uuid
-import shutil
 import re
 from datetime import datetime, timedelta
 
@@ -20,6 +17,7 @@ from .notifications import notification_ws
 from ..services.privacy import (can_view_profile_field, encode_privacy_settings,
                                 privacy_settings)
 from ..services.account_security import revoke_user_sessions
+from ..services.uploads import IMAGE_EXTENSIONS, MIB, save_validated_upload
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -154,16 +152,11 @@ async def update_me(data: ProfileUpdate, db: Session = Depends(get_db), user: Us
 
 
 def save_upload(upload: UploadFile) -> str:
-    allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-    suffix = Path(upload.filename or "").suffix.lower()
-    if suffix not in allowed:
-        raise HTTPException(400, "Only image files are allowed")
-    filename = f"{uuid.uuid4().hex}{suffix}"
-    target = Path(settings.upload_dir) / filename
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb") as f:
-        shutil.copyfileobj(upload.file, f)
-    return f"/uploads/{filename}"
+    url, _, _ = save_validated_upload(
+        upload, prefix="profiles", allowed=IMAGE_EXTENSIONS,
+        max_bytes=settings.max_image_upload_mb * MIB,
+    )
+    return url
 
 
 def possessive_pronoun(user: User) -> str:

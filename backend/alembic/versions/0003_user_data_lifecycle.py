@@ -5,6 +5,7 @@ Revises: 0002_advanced_privacy
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision = "0003_user_data_lifecycle"
 down_revision = "0002_advanced_privacy"
@@ -13,6 +14,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if "account_status" in {column["name"] for column in inspect(op.get_bind()).get_columns("users")}:
+        return
     op.add_column("users", sa.Column("account_status", sa.String(30), nullable=False, server_default="active"))
     op.add_column("users", sa.Column("deactivated_at", sa.DateTime(), nullable=True))
     op.add_column("users", sa.Column("deletion_requested_at", sa.DateTime(), nullable=True))
