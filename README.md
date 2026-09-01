@@ -251,6 +251,7 @@ VITE_API_URL=http://localhost:8000 npm run dev
 
 ### Kiểm thử API
 
+- Tài liệu API đầy đủ: [`docs/API.md`](docs/API.md).
 - Swagger: `http://localhost:8000/docs`.
 - Import `postman/SocialN.postman_collection.json` và đặt `base_url=http://localhost:8000`.
 - Health check: `curl http://localhost:8000/health`.
@@ -503,6 +504,7 @@ VITE_API_URL=http://localhost:8000 npm run dev
 
 ### API testing
 
+- Complete API documentation: [`docs/API.md`](docs/API.md).
 - Swagger: `http://localhost:8000/docs`.
 - Import `postman/SocialN.postman_collection.json` and set `base_url=http://localhost:8000`.
 - Health check: `curl http://localhost:8000/health`.
